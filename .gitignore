@@ -5,3 +5,5 @@
 **/checkpoints/*
 **/lightning_logs/
 **/results/*
+**/ssl4eo-s12_100patches/*
+*.png
