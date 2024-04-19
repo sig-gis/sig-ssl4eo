@@ -1,10 +1,10 @@
 from pathlib import Path
+from typing import Literal
 import numpy as np
 import rasterio
 import torch
 import os
 import cv2
-import csv
 import pickle
 import torch
 import pandas as pd
@@ -131,7 +131,7 @@ class SSL4EO(torch.utils.data.Dataset):
         root,
         label=Path | None,
         normalize=False,
-        mode=["s1", "s2a", "s2c"],
+        mode: Literal["s1", "s2a", "s2c"] = "s2c",
         dtype="uint8",
     ):
         self.root = root
@@ -145,25 +145,25 @@ class SSL4EO(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         target = img_s1_4s = img_s2a_4s = img_s2c_4s = None
-        if "s1" in self.mode:
-            img_s1_4s = self.get_array(
+        if self.mode == "s1":
+            img = self.get_array(
                 self.ids[index], "s1"
             )  # [4,2,264,264] float32 or uint8
-
-        if "s2a" in self.mode:
-            img_s2a_4s = self.get_array(
+        elif self.mode == "s2a":
+            img = self.get_array(
                 self.ids[index], "s2a"
             )  # [4,12,264,264] int16 or uint8
-
-        if "s2c" in self.mode:
-            img_s2c_4s = self.get_array(
+        elif self.mode == "s2c":
+            img = self.get_array(
                 self.ids[index], "s2c"
             )  # [4,13,264,264] int16 or uint8
+        else:
+            raise NotImplementedError
 
         if self.label is not None:
             target = self.get_label(index)
 
-        return img_s1_4s, img_s2a_4s, img_s2c_4s, target
+        return img, target
 
     def __len__(self):
         return self.length
