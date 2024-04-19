@@ -1,25 +1,23 @@
-from datasets.ssl4eo_dataset import SSL4EO
+import argparse
+import sys
 
+import torch
+from torch import nn
+from torchvision import models as torchvision_models
+from torch.utils.data import DataLoader
+
+from datasets.ssl4eo_dataset import SSL4EO
+from models.dino import utils
+from models.dino import vision_transformer as vits
 
 root = "./ssl4eo-s12_100patches/"
-# ds = SSL4EO(root=root, mode=["s1", "s2a", "s2c"])
+ds = SSL4EO(root=root, mode=["s2c"], label="data/match_test_label.csv")
 
-# ds = Bigearthnet(root=)
-# print(len(ds))
+
 # from linear BE dino
 model_root = "B13_vits16_dino_0099_ckpt.pth"
 # ============ building network ... ============
 # if the network is a Vision Transformer (i.e. vit_tiny, vit_small, vit_base)
-import argparse
-import sys
-import torch
-from torch import nn
-from torchvision import models as torchvision_models
-
-from models.dino import utils
-from models.dino import vision_transformer as vits
-
-# models.dino import vision_transformer as vits
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--arch", default="vit_small", type=str, help="Architecture")
