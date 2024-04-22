@@ -140,7 +140,7 @@ class SSL4EO(torch.utils.data.Dataset):
         self.mode = mode
         self.dtype = dtype
 
-        self.ids = os.listdir(os.path.join(self.root, self.mode[0]))
+        self.ids = os.listdir(os.path.join(self.root, self.mode))
         self.length = len(self.ids)
 
     def __getitem__(self, index):
@@ -162,11 +162,20 @@ class SSL4EO(torch.utils.data.Dataset):
 
         if self.label is not None:
             target = self.get_label(index)
+            target = self.get_multihot(target)
 
         return img, target
 
     def __len__(self):
         return self.length
+
+    @staticmethod
+    def get_multihot(label):
+        # TODO: rewrite this....
+        LABELS = [0, 1]  # non forest, forest
+        target = np.zeros((len(LABELS),), dtype=np.float32)
+        target[LABELS.index(label)] = 1
+        return target
 
     def get_label(self, index):
         df = pd.read_csv(self.label, header=None)
@@ -175,7 +184,6 @@ class SSL4EO(torch.utils.data.Dataset):
     def get_array(self, patch_id, mode):
         data_root_patch = os.path.join(self.root, mode, patch_id)
         patch_seasons = os.listdir(data_root_patch)
-        seasons = []
 
         if mode == "s1":
             bands = ALL_BANDS_S1_GRD
@@ -207,21 +215,19 @@ class SSL4EO(torch.utils.data.Dataset):
 
                 chs.append(ch)
             img = np.stack(chs, axis=0)  # [C,264,264]
-            seasons.append(img)
-        img_4s = np.stack(seasons, axis=0)  # [4,C,264,264]
 
         if self.normalize:
-            return img_4s
+            return img.astype("float32")
         elif self.dtype == "uint8":
             if mode == "s1":
-                return img_4s
+                return img
             else:
-                return (img_4s / 10000.0 * 255.0).astype("uint8")
+                return (img / 10000.0 * 255.0).astype("uint8")
         else:
             if mode == "s1":
-                return img_4s.astype("float32")
+                return img.astype("float32")
             else:
-                return img_4s.astype("int16")
+                return img.astype("int16")
 
 
 class Subset(Dataset):
