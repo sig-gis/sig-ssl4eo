@@ -1,82 +1,248 @@
 import argparse
 import sys
+import os
+from pathlib import Path
+import json
 
 import torch
 from torch import nn
 from torchvision import models as torchvision_models
 from torch.utils.data import DataLoader
 
-from datasets.ssl4eo_dataset import SSL4EO
+from datasets.ssl4eo_dataset import SSL4EO, Subset
 from models.dino import utils
 from models.dino import vision_transformer as vits
+from models.classification import linear
 
-root = "./ssl4eo-s12_100patches/"
-ds = SSL4EO(root=root, mode=["s2c"], label="data/match_test_label.csv")
+epochs = 2
+lr = 0.001
+checkpoints_dir = "dev_checkpoints"
+resume = False
 
 
-# from linear BE dino
+def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool):
+    linear_classifier.train()
+    metric_logger = utils.MetricLogger(delimiter="  ")
+    metric_logger.add_meter("lr", utils.SmoothedValue(window_size=1, fmt="{value:.6f}"))
+    header = "Epoch: [{}]".format(epoch)
+    for images, target in metric_logger.log_every(loader, 20, header):
+
+        b_zeros = torch.zeros(
+            (images.shape[0], 1, images.shape[2], images.shape[3]), dtype=torch.float32
+        )
+        # inp = torch.cat(py
+        # (images[:, :10, :, :], b_zeros, images[:, 10:, :, :]), dim=1
+        # )  # what does this do??
+        inp = images
+
+        # move to gpu
+        # inp = inp.cuda(non_blocking=True)
+        # target = target.cuda(non_blocking=True)
+
+        # forward
+        with torch.no_grad():
+            if "vit" in arch:
+                intermediate_output = model.get_intermediate_layers(inp, n)
+                output = torch.cat([x[:, 0] for x in intermediate_output], dim=-1)
+                if avgpool:
+                    output = torch.cat(
+                        (
+                            output.unsqueeze(-1),
+                            torch.mean(intermediate_output[-1][:, 1:], dim=1).unsqueeze(
+                                -1
+                            ),
+                        ),
+                        dim=-1,
+                    )
+                    output = output.reshape(output.shape[0], -1)
+            else:
+                output = model(inp)
+        output = linear_classifier(output)
+
+        # compute cross entropy loss
+        loss = nn.MultiLabelSoftMarginLoss()(output, target.long())
+
+        # compute the gradients
+        optimizer.zero_grad()
+        loss.backward()
+
+        # step
+        optimizer.step()
+
+        # log
+        # torch.cuda.synchronize()
+        metric_logger.update(loss=loss.item())
+        metric_logger.update(lr=optimizer.param_groups[0]["lr"])
+    # gather the stats from all processes
+    metric_logger.synchronize_between_processes()
+    print("Averaged stats:", metric_logger)
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+
+
+@torch.no_grad()
+def validate_network(val_loader, model, linear_classifier, n, avgpool):
+    linear_classifier.eval()
+    metric_logger = utils.MetricLogger(delimiter="  ")
+    header = "Test:"
+    for images, target in metric_logger.log_every(val_loader, 20, header):
+
+        b_zeros = torch.zeros(
+            (images.shape[0], 1, images.shape[2], images.shape[3]), dtype=torch.float32
+        )
+        # inp = torch.cat((images[:, :10, :, :], b_zeros, images[:, 10:, :, :]), dim=1)
+        inp = images
+        # move to gpu
+        # inp = inp.cuda(non_blocking=True)
+        # target = target.cuda(non_blocking=True)
+
+        # forward
+        with torch.no_grad():
+            if "vit" in arch:
+                intermediate_output = model.get_intermediate_layers(inp, n)
+                output = torch.cat([x[:, 0] for x in intermediate_output], dim=-1)
+                if avgpool:
+                    output = torch.cat(
+                        (
+                            output.unsqueeze(-1),
+                            torch.mean(intermediate_output[-1][:, 1:], dim=1).unsqueeze(
+                                -1
+                            ),
+                        ),
+                        dim=-1,
+                    )
+                    output = output.reshape(output.shape[0], -1)
+            else:
+                output = model(inp)
+        output = linear_classifier(output)
+        loss = nn.MultiLabelSoftMarginLoss()(output, target.long())
+
+
+root = "./data/match_dev/"
 model_root = "B13_vits16_dino_0099_ckpt.pth"
-# ============ building network ... ============
-# if the network is a Vision Transformer (i.e. vit_tiny, vit_small, vit_base)
+
+_data = SSL4EO(root=root, mode="s2c", label="data/match_dev.csv", normalize=True)
+
+training_data = Subset(_data, range(16))
+dataset_val = Subset(_data, range(16, 23))
+train_loader = DataLoader(training_data, batch_size=8, shuffle=True, drop_last=True)
+val_loader = (
+    train_loader  # DataLoader(val_data, batch_size=8, shuffle=False, drop_last=True)
+)
+
+
+# # from linear BE dino
+
+# # ============ building network ... ============
+# # if the network is a Vision Transformer (i.e. vit_tiny, vit_small, vit_base)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--arch", default="vit_small", type=str, help="Architecture")
-parser.add_argument(
-    "--patch_size", default=16, type=int, help="Patch resolution of the model."
-)
-parser.add_argument(
-    "--pretrained",
-    default=model_root,
-    type=str,
-    help="Path to pretrained weights to evaluate.",
-)
-parser.add_argument(
-    "--n_last_blocks",
-    default=4,
-    type=int,
-    help="""Concatenate [CLS] tokens
-        for the `n` last blocks. We use `n=4` when evaluating ViT-Small and `n=1` with ViT-Base.""",
-)
-parser.add_argument(
-    "--avgpool_patchtokens",
-    default=False,
-    type=utils.bool_flag,
-    help="""Whether ot not to concatenate the global average pooled features to the [CLS] token.
-        We typically set this to False for ViT-Small and to True with ViT-Base.""",
-)
-parser.add_argument(
-    "--checkpoint_key",
-    default="teacher",
-    type=str,
-    help='Key to use in the checkpoint (example: "teacher")',
-)
-
-args = parser.parse_args()
-if args.arch in vits.__dict__.keys():
-    model = vits.__dict__[args.arch](
-        patch_size=args.patch_size, num_classes=0, in_chans=13
-    )
-    embed_dim = model.embed_dim * (args.n_last_blocks + int(args.avgpool_patchtokens))
-# otherwise, we check if the architecture is in torchvision models
-elif args.arch in torchvision_models.__dict__.keys():
-    model = torchvision_models.__dict__[args.arch]()
-    embed_dim = model.fc.weight.shape[1]
-    model.conv1 = torch.nn.Conv2d(
-        13, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False
-    )
-    model.fc = nn.Identity()
-    # model.fc = torch.nn.Linear(2048,19)
-# if the network is a XCiT
-elif "xcit" in args.arch:
-    model = torch.hub.load("facebookresearch/xcit:main", args.arch, num_classes=0)
-    embed_dim = model.embed_dim
+arch = "vit_small"
+avgpool_patchtokens = False
+checkpoint_key = "teacher"
+n_last_blocks = 4
+patch_size = 16
+pretrained = model_root
+if arch in vits.__dict__.keys():
+    model = vits.__dict__[arch](patch_size=patch_size, num_classes=0, in_chans=13)
+    embed_dim = model.embed_dim * (n_last_blocks + int(avgpool_patchtokens))
 else:
-    print(f"Unknow architecture: {args.arch}")
+    print(f"Unknow architecture: {arch}")
     sys.exit(1)
 model.cpu()
 model.eval()
 # load weights to evaluate
-utils.load_pretrained_weights(
-    model, args.pretrained, args.checkpoint_key, args.arch, args.patch_size
+utils.load_pretrained_weights(model, pretrained, checkpoint_key, arch, patch_size)
+
+print(f"Model {arch} built.")
+linear_classifier = linear.LinearClassifier(embed_dim, num_labels=2)
+
+# ============ preparing data ... ============
+from torchvision import transforms
+
+train_transform = transforms.Compose(
+    [
+        transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        # cvtransforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+    ]
 )
-print(f"Model {args.arch} built.")
+# dataset_train = datasets.ImageFolder(os.path.join(data_path, "train"), transform=train_transform)
+
+val_transform = transforms.Compose(
+    [
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        # cvtransforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+    ]
+)
+
+n_channels = 13
+optimizer = torch.optim.SGD(
+    linear_classifier.parameters(),
+    lr,  # linear scaling rule
+    momentum=0.9,
+    weight_decay=0,  # we do not apply weight decay
+)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs, eta_min=0)
+# Optionally resume from a checkpoint
+to_restore = {"epoch": 0, "best_acc": 0.0}
+if resume:
+    utils.restart_from_checkpoint(
+        os.path.join(checkpoints_dir, "checkpoint.pth.tar"),
+        run_variables=to_restore,
+        state_dict=linear_classifier,
+        optimizer=optimizer,
+        scheduler=scheduler,
+    )
+start_epoch = to_restore["epoch"]
+best_acc = to_restore["best_acc"]
+os.makedirs(checkpoints_dir, exist_ok=True)
+for epoch in range(start_epoch, epochs):
+
+    train_stats = train(
+        model,
+        linear_classifier,
+        optimizer,
+        train_loader,
+        epoch,
+        n_last_blocks,
+        avgpool_patchtokens,
+    )
+    scheduler.step()
+
+    log_stats = {**{f"train_{k}": v for k, v in train_stats.items()}, "epoch": epoch}
+    if epoch == epochs - 1:
+        test_stats = validate_network(
+            val_loader,
+            model,
+            linear_classifier,
+            n_last_blocks,
+            avgpool_patchtokens,
+        )
+        print(
+            f"Accuracy at epoch {epoch} of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%"
+        )
+        best_acc = max(best_acc, test_stats["acc1"])
+        print(f"Max accuracy so far: {best_acc:.2f}%")
+        log_stats = {
+            **{k: v for k, v in log_stats.items()},
+            **{f"test_{k}": v for k, v in test_stats.items()},
+        }
+    if utils.is_main_process():
+        with (Path(checkpoints_dir) / "log.txt").open("a") as f:
+            f.write(json.dumps(log_stats) + "\n")
+        save_dict = {
+            "epoch": epoch + 1,
+            "state_dict": linear_classifier.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
+            "best_acc": best_acc,
+        }
+        torch.save(save_dict, os.path.join(checkpoints_dir, "checkpoint.pth.tar"))
+print(
+    "Training of the supervised linear classifier on frozen features completed.\n"
+    "Top-1 test accuracy: {acc:.1f}".format(acc=best_acc)
+)
