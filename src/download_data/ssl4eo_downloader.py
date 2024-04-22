@@ -81,6 +81,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import ee
 import numpy as np
 import rasterio
+import google.auth
 
 # import shapefile
 import urllib3
@@ -690,7 +691,12 @@ if __name__ == "__main__":
 
     # initialize ee
     PROJECT = "pc530-fao-fra-rss"
-    ee.Initialize(project=PROJECT)
+    credentials, _ = google.auth.default()
+    ee.Initialize(
+        credentials,
+        project=PROJECT,
+        opt_url="https://earthengine-highvolume.googleapis.com",
+    )
     # get data collection (remove clouds)
     collection = get_collection(args.collection, args.meta_cloud_name, args.cloud_pct)
 
