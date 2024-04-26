@@ -8,16 +8,12 @@ import torch
 from torch import nn
 from torchvision import models as torchvision_models
 from torch.utils.data import DataLoader
+from sklearn.metrics import average_precision_score
 
 from datasets.ssl4eo_dataset import SSL4EO, Subset
 from models.dino import utils
 from models.dino import vision_transformer as vits
 from models.classification import linear
-
-epochs = 2
-lr = 0.001
-checkpoints_dir = "dev_checkpoints"
-resume = False
 
 
 def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool):
@@ -30,8 +26,8 @@ def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool):
         b_zeros = torch.zeros(
             (images.shape[0], 1, images.shape[2], images.shape[3]), dtype=torch.float32
         )
-        # inp = torch.cat(py
-        # (images[:, :10, :, :], b_zeros, images[:, 10:, :, :]), dim=1
+        # inp = torch.cat(
+        #     (images[:, :10, :, :], b_zeros, images[:, 10:, :, :]), dim=1
         # )  # what does this do??
         inp = images
 
@@ -116,18 +112,62 @@ def validate_network(val_loader, model, linear_classifier, n, avgpool):
         output = linear_classifier(output)
         loss = nn.MultiLabelSoftMarginLoss()(output, target.long())
 
+        """
+        if linear_classifier.module.num_labels >= 5:
+            acc1, acc5 = utils.accuracy(output, target, topk=(1, 5))
+        else:
+            acc1, = utils.accuracy(output, target, topk=(1,))
+        """
+        score = torch.sigmoid(output).detach().cpu()
+        acc1 = average_precision_score(target.cpu(), score, average="micro") * 100.0
+        acc5 = acc1
 
-root = "./data/match_dev/"
+        batch_size = inp.shape[0]
+        metric_logger.update(loss=loss.item())
+        metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
+
+        if linear_classifier.num_labels >= 5:
+            metric_logger.meters["acc5"].update(acc5.item(), n=batch_size)
+
+    if linear_classifier.num_labels >= 5:
+        print(
+            "* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}".format(
+                top1=metric_logger.acc1,
+                top5=metric_logger.acc5,
+                losses=metric_logger.loss,
+            )
+        )
+    else:
+        print(
+            "* Acc@1 {top1.global_avg:.3f} loss {losses.global_avg:.3f}".format(
+                top1=metric_logger.acc1, losses=metric_logger.loss
+            )
+        )
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+
+
+root = "./data/match_training_sample/"
 model_root = "B13_vits16_dino_0099_ckpt.pth"
+arch = "vit_small"
+avgpool_patchtokens = False
+checkpoint_key = "teacher"
+n_last_blocks = 4
+patch_size = 16
+pretrained = model_root
 
-_data = SSL4EO(root=root, mode="s2c", label="data/match_dev.csv", normalize=True)
+epochs = 5
+lr = 0.001
+checkpoints_dir = "dev_checkpoints"
+resume = False
 
-training_data = Subset(_data, range(16))
-dataset_val = Subset(_data, range(16, 23))
-train_loader = DataLoader(training_data, batch_size=8, shuffle=True, drop_last=True)
-val_loader = (
-    train_loader  # DataLoader(val_data, batch_size=8, shuffle=False, drop_last=True)
+_data = SSL4EO(
+    root=root, mode="s2c", label="data/match_testing_sample.csv", normalize=True
 )
+
+training_data = Subset(_data, range(7600, 7670 + 670))
+dataset_val = Subset(_data, range(40, 81))
+train_loader = DataLoader(training_data, batch_size=8, shuffle=True, drop_last=True)
+val_loader = DataLoader(dataset_val, batch_size=8, shuffle=False, drop_last=True)
 
 
 # # from linear BE dino
@@ -135,14 +175,7 @@ val_loader = (
 # # ============ building network ... ============
 # # if the network is a Vision Transformer (i.e. vit_tiny, vit_small, vit_base)
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--arch", default="vit_small", type=str, help="Architecture")
-arch = "vit_small"
-avgpool_patchtokens = False
-checkpoint_key = "teacher"
-n_last_blocks = 4
-patch_size = 16
-pretrained = model_root
+
 if arch in vits.__dict__.keys():
     model = vits.__dict__[arch](patch_size=patch_size, num_classes=0, in_chans=13)
     embed_dim = model.embed_dim * (n_last_blocks + int(avgpool_patchtokens))
@@ -201,7 +234,6 @@ start_epoch = to_restore["epoch"]
 best_acc = to_restore["best_acc"]
 os.makedirs(checkpoints_dir, exist_ok=True)
 for epoch in range(start_epoch, epochs):
-
     train_stats = train(
         model,
         linear_classifier,
