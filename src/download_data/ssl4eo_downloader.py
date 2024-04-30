@@ -6,35 +6,19 @@
 
 ## match and download pre-sampled locations
 python ssl4eo_downloader.py \
-    --save_path ./data \
-    --collection COPERNICUS/S2 \
+    --save_path /Volumes/External/pc530/training \
+    --collection COPERNICUS/S2 \ 
     --meta_cloud_name CLOUDY_PIXEL_PERCENTAGE \
-    --cloud_pct 20 \
-    --dates 2021-12-21 2021-09-22 2021-06-21 2021-03-20 \
-    --radius 1320 \
-    --bands B1 B2 B3 B4 B5 B6 B7 B8 B8A B9 B10 B11 B12 \
-    --crops 44 264 264 264 132 132 132 264 132 44 44 132 132 \
-    --dtype uint16 \
-    --num_workers 8 \
-    --log_freq 100 \
-    --match_file ./data/sampled_locations.csv \
-    --indices_range 0 250000
+    --cloud_pct 10 \ 
+    --year 2018  \ 
+    --radius 1320 \ 
+    --bands B1 B2 B3 B4 B5 B6 B7 B8 B8A B9 B10 B11 B12  \ 
+    --crops 44 264 264 264 132 132 132 264 132 44 44 132 132 \ 
+    --dtype uint16 \ 
+    --num_workers 12 \ 
+    --log_freq 100 \ 
+    --match_file data/match_training_sample.csv  
 
-## resample and download new locations with rtree/grid overlap search
-python ssl4eo_downloader.py \
-    --save_path ./data \
-    --collection COPERNICUS/S2 \
-    --meta_cloud_name CLOUDY_PIXEL_PERCENTAGE \
-    --cloud_pct 20 \
-    --dates 2021-12-21 2021-09-22 2021-06-21 2021-03-20 \
-    --radius 1320 \
-    --bands B1 B2 B3 B4 B5 B6 B7 B8 B8A B9 B10 B11 B12 \
-    --crops 44 264 264 264 132 132 132 264 132 44 44 132 132 \
-    --dtype uint16 \
-    --num_workers 8 \
-    --log_freq 100 \
-    --overlap_check rtree \
-    --indices_range 0 250000
 
 ## resume from interruption (e.g. 20 ids processed)
 python ssl4eo_downloader.py \
@@ -69,12 +53,11 @@ python ssl4eo_downloader.py \
 import argparse
 import csv
 import json
-import math
 import os
 import time
 import warnings
 from collections import OrderedDict
-from datetime import date, datetime, timedelta
+from datetime import datetime
 from multiprocessing.dummy import Lock, Pool
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -84,134 +67,15 @@ import rasterio
 import google.auth
 from google.api_core import exceptions, retry
 
-# import shapefile
 import urllib3
 from rasterio.transform import Affine
-from rtree import index
-from shapely.geometry import Point, shape
-from torchvision.datasets.utils import download_and_extract_archive
 from tqdm import tqdm
 
 warnings.simplefilter("ignore", UserWarning)
 
 
-""" samplers to get locations of interest points"""
-
-
-class UniformSampler:
-    def sample_point(self) -> List[float]:
-        lon = np.random.uniform(-180, 180)
-        lat = np.random.uniform(-90, 90)
-        return [lon, lat]
-
-
-class GaussianSampler:
-    def __init__(
-        self,
-        interest_points: Optional[List[List[float]]] = None,
-        num_cities: int = 1000,
-        std: float = 20,
-    ) -> None:
-        if interest_points is None:
-            cities = self.get_world_cities()
-            self.interest_points = self.get_interest_points(cities, size=num_cities)
-        else:
-            self.interest_points = interest_points
-        self.std = std
-
-    def sample_point(self) -> List[float]:
-        rng = np.random.default_rng()
-        point = rng.choice(self.interest_points)
-        std = self.km2deg(self.std)
-        lon, lat = np.random.normal(loc=point, scale=[std, std])
-        return [lon, lat]
-
-    @staticmethod
-    def get_world_cities(download_root: str = "world_cities") -> List[Dict[str, Any]]:
-        url = "https://simplemaps.com/static/data/world-cities/basic/simplemaps_worldcities_basicv1.71.zip"  # noqa: E501
-        filename = "worldcities.csv"
-        if not os.path.exists(os.path.join(download_root, os.path.basename(url))):
-            download_and_extract_archive(url, download_root)
-        with open(os.path.join(download_root, filename), encoding="UTF-8") as csvfile:
-            reader = csv.DictReader(csvfile, delimiter=",", quotechar='"')
-            cities = []
-            for row in reader:
-                row["population"] = (
-                    row["population"].replace(".", "") if row["population"] else "0"
-                )
-                cities.append(row)
-        return cities
-
-    @staticmethod
-    def get_interest_points(
-        cities: List[Dict[str, str]], size: int = 10000
-    ) -> List[List[float]]:
-        cities = sorted(cities, key=lambda c: int(c["population"]), reverse=True)[:size]
-        points = [[float(c["lng"]), float(c["lat"])] for c in cities]
-        return points
-
-    @staticmethod
-    def km2deg(kms: float, radius: float = 6371) -> float:
-        return kms / (2.0 * radius * np.pi / 360.0)
-
-    @staticmethod
-    def deg2km(deg: float, radius: float = 6371) -> float:
-        return deg * (2.0 * radius * np.pi / 360.0)
-
-
-class BoundedUniformSampler:
-    def __init__(self, boundaries: shape = None) -> None:
-        if boundaries is None:
-            self.boundaries = self.get_country_boundaries()
-        else:
-            self.boundaries = boundaries
-
-    def sample_point(self) -> List[float]:
-        minx, miny, maxx, maxy = self.boundaries.bounds
-        lon = np.random.uniform(minx, maxx)
-        lat = np.random.uniform(miny, maxy)
-        p = Point(lon, lat)
-        if self.boundaries.contains(p):
-            return [p.x, p.y]
-        else:
-            return self.sample_point()
-
-    @staticmethod
-    def get_country_boundaries(
-        download_root: str = os.path.expanduser("~/.cache/naturalearth"),
-    ) -> shape:
-        url = "https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/110m/cultural/ne_110m_admin_0_countries.zip"  # noqa: E501
-        filename = "ne_110m_admin_0_countries.shp"
-        if not os.path.exists(os.path.join(download_root, os.path.basename(url))):
-            download_and_extract_archive(url, download_root)
-        sf = shapefile.Reader(os.path.join(download_root, filename))
-        return shape(sf.shapes().__geo_interface__)
-
-
-class OverlapError(Exception):
-    pass
-
-
 def date2str(date: datetime) -> str:
     return date.strftime("%Y-%m-%d")
-
-
-# def get_period(
-#     date: datetime, days: int = 5
-# ) -> Tuple[str, str, str, str]:  # 2020-02-10, 5
-#     date1 = date - timedelta(days=days / 2)  # 2020-02-8
-#     date2 = date + timedelta(days=days / 2)  # 2020-02-12
-#     date3 = date1 - timedelta(days=365)  # 2019-02-8
-#     date4 = date2 - timedelta(days=365)  # 2021-02-12
-#     return (
-#         date2str(date1),
-#         date2str(date2),
-#         date2str(date3),
-#         date2str(date4),
-#     )  # two-years buffer
-
-
-"""get collection and remove clouds from ee"""
 
 
 def maskS2clouds(args: Any, image: ee.Image) -> ee.Image:
@@ -323,12 +187,9 @@ def get_patch(
     )
 
 
-""" get data --- match from pre-sampled locations """
-
-
 # TODO: [x] add google retry
 # [] handel errors
-# [] pass in year instead of dates
+# [x] pass in year instead of dates
 # [x] refactor or rm get_period
 # [x] simplify filter collection
 @retry.Retry()
@@ -369,169 +230,6 @@ def get_patch_by_match(
         return None, coords
 
     return patches, coords
-
-
-""" sample new coord, check overlap, and get data --- rtree """
-
-
-# def get_random_patches_rtree(
-#     idx: int,
-#     collection: ee.ImageCollection,
-#     bands: List[str],
-#     crops: Dict[str, Any],
-#     dtype: str,
-#     sampler: GaussianSampler,
-#     dates: List[Any],
-#     radius: float,
-#     debug: bool = False,
-#     rtree_obj: index.Index = None,
-# ) -> Tuple[List[Dict[str, Any]], List[float]]:
-#     # (lon,lat) of top-10000 cities
-#     coords = sampler.sample_point()
-
-#     # use rtree to avoid strong overlap
-#     try:
-#         new_coord = (coords[0], coords[1])
-#         for i in rtree_obj.nearest(new_coord, num_results=1, objects=True):
-#             distance = np.sqrt(
-#                 sampler.deg2km(abs(new_coord[0] - i.bbox[2])) ** 2
-#                 + sampler.deg2km(abs(new_coord[1] - i.bbox[3])) ** 2
-#             )
-#             if distance < (1.5 * radius / 1000):
-#                 raise OverlapError
-#         rtree_obj.insert(
-#             len(rtree_obj) - 1, (new_coord[0], new_coord[1], new_coord[0], new_coord[1])
-#         )
-
-#     except OverlapError:
-#         patches, center_coord = get_random_patches_rtree(
-#             idx,
-#             collection,
-#             bands,
-#             crops,
-#             dtype,
-#             sampler,
-#             dates,
-#             radius,
-#             debug,
-#             rtree_obj,
-#         )
-
-#     # random +- 30 days of random days within 1 year from the reference dates
-#     periods = [get_period(date, days=60) for date in dates]
-
-#     try:
-#         filtered_collections = [
-#             filter_collection(collection, coords, p) for p in periods
-#         ]
-#         patches = [
-#             get_patch(c, coords, radius, bands=bands, crop=crops, dtype=dtype)
-#             for c in filtered_collections
-#         ]
-#         center_coord = coords
-
-#     except (ee.EEException, urllib3.exceptions.HTTPError) as e:
-#         if debug:
-#             print(e)
-#         rtree_obj.insert(
-#             len(rtree_obj) - 1, (new_coord[0], new_coord[1], new_coord[0], new_coord[1])
-#         )  # prevent from sampling an old coord that doesn't fit the collection
-#         patches, center_coord = get_random_patches_rtree(
-#             idx,
-#             collection,
-#             bands,
-#             crops,
-#             dtype,
-#             sampler,
-#             dates,
-#             radius,
-#             debug,
-#             rtree_obj,
-#         )
-
-#     return patches, center_coord
-
-
-""" sample new coord, check overlap, and get data --- grid """
-
-
-# def get_random_patches_grid(
-#     idx: int,
-#     collection: ee.ImageCollection,
-#     bands: List[str],
-#     crops: Dict[str, Any],
-#     dtype: str,
-#     sampler: GaussianSampler,
-#     dates: List[Any],
-#     radius: float,
-#     debug: bool = False,
-#     grid_dict: Dict[Tuple[int, int], Any] = {},
-# ) -> Tuple[List[Dict[str, Any]], List[float]]:
-#     # (lon,lat) of top-10000 cities
-#     coords = sampler.sample_point()
-
-#     # avoid strong overlap
-#     try:
-#         new_coord = (coords[0], coords[1])
-#         gridIndex = (math.floor(new_coord[0] + 180), math.floor(new_coord[1] + 90))
-
-#         if gridIndex not in grid_dict.keys():
-#             grid_dict[gridIndex] = {new_coord}
-#         else:
-#             for coord in grid_dict[gridIndex]:
-#                 distance = np.sqrt(
-#                     sampler.deg2km(abs(new_coord[0] - coord[0])) ** 2
-#                     + sampler.deg2km(abs(new_coord[1] - coord[1])) ** 2
-#                 )
-#                 if distance < (1.5 * radius / 1000):
-#                     raise OverlapError
-#             grid_dict[gridIndex].add(new_coord)
-
-#     except OverlapError:
-#         patches, center_coord = get_random_patches_grid(
-#             idx,
-#             collection,
-#             bands,
-#             crops,
-#             dtype,
-#             sampler,
-#             dates,
-#             radius,
-#             debug,
-#             grid_dict=grid_dict,
-#         )
-
-#     # random +- 15 days of random days within 1 year from the reference dates
-#     periods = [get_period(date, days=30) for date in dates]
-
-#     try:
-#         filtered_collections = [
-#             filter_collection(collection, coords, p) for p in periods
-#         ]
-#         patches = [
-#             get_patch(c, coords, radius, bands=bands, crop=crops, dtype=dtype)
-#             for c in filtered_collections
-#         ]
-
-#         center_coord = coords
-
-#     except (ee.EEException, urllib3.exceptions.HTTPError) as e:
-#         if debug:
-#             print(e)
-#         patches, center_coord = get_random_patches_grid(
-#             idx,
-#             collection,
-#             bands,
-#             crops,
-#             dtype,
-#             sampler,
-#             dates,
-#             radius,
-#             debug,
-#             grid_dict=grid_dict,
-#         )
-
-#     return patches, center_coord
 
 
 def save_geotiff(
@@ -614,14 +312,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--cloud_pct", type=int, default=20, help="cloud percentage threshold"
     )
-    # patch properties
-    # parser.add_argument(
-    #     "--dates",
-    #     type=str,
-    #     nargs="+",
-    #     default=["2021-12-21", "2021-09-22", "2021-06-21", "2021-03-20"],
-    #     help="reference dates",
-    # )
+
     # patch properties
     parser.add_argument(
         "--year",
@@ -662,13 +353,7 @@ if __name__ == "__main__":
         help="crop size for each band",
     )
     parser.add_argument("--dtype", type=str, default="float32", help="data type")
-    # sampler properties
-    parser.add_argument(
-        "--num_cities", type=int, default=10000, help="number of cities to sample"
-    )
-    parser.add_argument(
-        "--std", type=int, default=50, help="std of gaussian distribution"
-    )
+
     # download settings
     parser.add_argument("--num_workers", type=int, default=8, help="number of workers")
     parser.add_argument("--log_freq", type=int, default=10, help="print frequency")
@@ -683,14 +368,7 @@ if __name__ == "__main__":
         default=None,
         help="match pre-sampled coordinates and indexes",
     )
-    # op2-3: resample from scratch, grid or rtree based overlap check
-    parser.add_argument(
-        "--overlap_check",
-        type=str,
-        default="rtree",
-        choices=["grid", "rtree", None],
-        help="overlap check method",
-    )
+
     # number of locations to download
     parser.add_argument(
         "--indices_range",
@@ -716,13 +394,6 @@ if __name__ == "__main__":
     )
     # get data collection (remove clouds)
     collection = get_collection(args.collection, args.meta_cloud_name, args.cloud_pct)
-
-    # initialize sampler
-    sampler = GaussianSampler(num_cities=args.num_cities, std=args.std)
-
-    # dates = []
-    # for d in args.dates:
-    #     dates.append(date.fromisoformat(d))
 
     year = args.year
     bands = args.bands
