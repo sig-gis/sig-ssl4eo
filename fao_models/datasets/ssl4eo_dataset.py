@@ -144,7 +144,7 @@ class SSL4EO(torch.utils.data.Dataset):
         self.length = len(self.ids)
 
     def __getitem__(self, index):
-        target = img_s1_4s = img_s2a_4s = img_s2c_4s = None
+        target = None
         if self.mode == "s1":
             img = self.get_array(
                 self.ids[index], "s1"
@@ -163,6 +163,7 @@ class SSL4EO(torch.utils.data.Dataset):
         if self.label is not None:
             target = self.get_label(index)
             target = self.get_multihot(target)
+            target = target.astype(img.dtype)
 
         return img, target
 
