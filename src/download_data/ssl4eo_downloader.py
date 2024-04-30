@@ -286,8 +286,10 @@ def get_patch(
     bands: List[str],
     crop: Optional[Dict[str, Any]] = None,
     dtype: str = "float32",
+    sort_by: str = "system:time_start",
+    sort_acceding: bool = False,
 ) -> Dict[str, Any]:
-    image = collection.sort("system:time_start", False).first()  # get most recent
+    image = collection.sort(sort_by, sort_acceding).first()  # get most recent
     region = (
         ee.Geometry.Point(center_coord).buffer(radius).bounds()
     )  # sample region bound
@@ -330,7 +332,7 @@ def get_patch(
 # [x] refactor or rm get_period
 # [x] simplify filter collection
 @retry.Retry()
-def get_random_patches_match(
+def get_patch_by_match(
     idx: int,
     collection: ee.ImageCollection,
     bands: List[str],
@@ -352,12 +354,18 @@ def get_random_patches_match(
             collection, coords, start_date=start_date, end_date=end_date
         )
         patches = get_patch(
-            filtered_collection, coords, radius, bands=bands, crop=crops, dtype=dtype
+            filtered_collection,
+            coords,
+            radius,
+            bands=bands,
+            crop=crops,
+            dtype=dtype,
+            sort_acceding=True,
+            sort_by="CLOUDY_PIXEL_PERCENTAGE",  # TODO: pull from cli?
         )
 
     except (ee.EEException, urllib3.exceptions.HTTPError) as e:
-        if debug:
-            print(e)
+        raise e
         return None, coords
 
     return patches, coords
@@ -618,7 +626,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--year",
         type=str,
-        nargs="+",
+        # nargs="+",
         default="2018",
         help="The year from which to grab samples from",
     )
@@ -765,7 +773,7 @@ if __name__ == "__main__":
                     return
 
         if args.match_file:
-            patches, center_coord = get_random_patches_match(
+            patch, center_coord = get_patch_by_match(
                 idx,
                 collection,
                 bands,
@@ -779,18 +787,18 @@ if __name__ == "__main__":
         else:
             raise NotImplementedError
 
-        if patches is not None:
+        if patch is not None:
             if args.save_path is not None:
                 # s2c
                 location_path = os.path.join(args.save_path, "imgs", f"{idx:06d}")
                 os.makedirs(location_path, exist_ok=True)
-                for patch in patches:
-                    save_patch(
-                        raster=patch["raster"],
-                        coords=patch["coords"],
-                        metadata=patch["metadata"],
-                        path=location_path,
-                    )
+
+                save_patch(
+                    raster=patch["raster"],
+                    coords=patch["coords"],
+                    metadata=patch["metadata"],
+                    path=location_path,
+                )
 
             count = counter.update(1)
             if count % args.log_freq == 0:
@@ -801,7 +809,7 @@ if __name__ == "__main__":
         # add to existing checked locations
         with open(ext_path, "a") as f:
             writer = csv.writer(f)
-            if patches is not None:
+            if patch is not None:
                 if args.match_file:
                     success = 2
                 else:
