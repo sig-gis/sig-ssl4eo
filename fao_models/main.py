@@ -29,7 +29,7 @@ def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool):
         # inp = torch.cat(
         #     (images[:, :10, :, :], b_zeros, images[:, 10:, :, :]), dim=1
         # )  # what does this do??
-        inp = images
+        inp = images.type(torch.float32)
 
         # move to gpu
         # inp = inp.cuda(non_blocking=True)
@@ -86,7 +86,7 @@ def validate_network(val_loader, model, linear_classifier, n, avgpool):
             (images.shape[0], 1, images.shape[2], images.shape[3]), dtype=torch.float32
         )
         # inp = torch.cat((images[:, :10, :, :], b_zeros, images[:, 10:, :, :]), dim=1)
-        inp = images
+        inp = images.type(torch.float32)
         # move to gpu
         # inp = inp.cuda(non_blocking=True)
         # target = target.cuda(non_blocking=True)
@@ -147,6 +147,7 @@ def validate_network(val_loader, model, linear_classifier, n, avgpool):
 
 
 root = "./data/match_training_sample/"
+label = "data/match_training_sample.csv"
 model_root = "B13_vits16_dino_0099_ckpt.pth"
 arch = "vit_small"
 avgpool_patchtokens = False
@@ -160,15 +161,13 @@ lr = 0.001
 checkpoints_dir = "dev_checkpoints"
 resume = False
 
-_data = SSL4EO(
-    root=root, mode="s2c", label="data/match_testing_sample.csv", normalize=True
-)
+_data = SSL4EO(root=root, mode="s2c", label=label, normalize=False)
 
-training_data = Subset(_data, range(7600, 7670 + 670))
-dataset_val = Subset(_data, range(40, 81))
+training_data = Subset(_data, range(7665, 7670 + 5))  # range(6600, 7670 + 1670)
+dataset_val = Subset(_data, range(40, 51))
 train_loader = DataLoader(training_data, batch_size=8, shuffle=True, drop_last=True)
 val_loader = DataLoader(dataset_val, batch_size=8, shuffle=False, drop_last=True)
-
+print(training_data[0])
 
 # # from linear BE dino
 

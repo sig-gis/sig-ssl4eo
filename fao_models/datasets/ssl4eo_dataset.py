@@ -141,6 +141,8 @@ class SSL4EO(torch.utils.data.Dataset):
         self.dtype = dtype
 
         self.ids = os.listdir(os.path.join(self.root, self.mode))
+        if self.label is not None:
+            self.label_df = pd.read_csv(self.label, header=None)
         self.length = len(self.ids)
 
     def __getitem__(self, index):
@@ -179,8 +181,10 @@ class SSL4EO(torch.utils.data.Dataset):
         return target
 
     def get_label(self, index):
-        df = pd.read_csv(self.label, header=None)
-        return df.iloc[index][3]
+        matching_path = int(self.ids[index])
+        row = self.label_df[self.label_df[0] == matching_path].values[0]
+        label = row[3]
+        return label
 
     def get_array(self, patch_id, mode):
         data_root_patch = os.path.join(self.root, mode, patch_id)
