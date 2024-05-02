@@ -140,7 +140,7 @@ class SSL4EO(torch.utils.data.Dataset):
         self.mode = mode
         self.dtype = dtype
 
-        self.ids = os.listdir(os.path.join(self.root, self.mode))
+        self.ids = os.listdir(os.path.join(self.root))
         if self.label is not None:
             self.label_df = pd.read_csv(self.label, header=None)
         self.length = len(self.ids)
@@ -187,7 +187,7 @@ class SSL4EO(torch.utils.data.Dataset):
         return label
 
     def get_array(self, patch_id, mode):
-        data_root_patch = os.path.join(self.root, mode, patch_id)
+        data_root_patch = os.path.join(self.root, patch_id)
         patch_seasons = os.listdir(data_root_patch)
 
         if mode == "s1":
