@@ -17,14 +17,14 @@ from models.dino import vision_transformer as vits
 from models.classification import linear
 
 
-def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool):
+def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool, device):
     linear_classifier.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter("lr", utils.SmoothedValue(window_size=1, fmt="{value:.6f}"))
     header = "Epoch: [{}]".format(epoch)
     for images, target in metric_logger.log_every(loader, 20, header):
-        inp = images.type(torch.float32)
-
+        inp = images.type(torch.float32).to(device)
+        target = target.to(device)
         # move to gpu
         # inp = inp.cuda(non_blocking=True)
         # target = target.cuda(non_blocking=True)
@@ -70,15 +70,15 @@ def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool):
 
 
 @torch.no_grad()
-def validate_network(val_loader, model, linear_classifier, n, avgpool):
+def validate_network(val_loader, model, linear_classifier, n, avgpool, device):
     linear_classifier.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = "Test:"
     for images, target in metric_logger.log_every(val_loader, 20, header):
-        inp = images.type(torch.float32)
+        inp = images.type(torch.float32).to(device)
+        target = target.to(device)
         # move to gpu
         # inp = inp.cuda(non_blocking=True)
-        # target = target.cuda(non_blocking=True)
 
         # forward
         with torch.no_grad():
@@ -162,6 +162,7 @@ def eval_linear(
     training_data: torch.utils.data.Dataset,
     dataset_val: torch.utils.data.Dataset,
     arch: Literal["vit_small"],
+    device: str,
     pretrained: str | Path,
     avgpool_patchtokens: bool,
     patch_size: int,
@@ -188,6 +189,10 @@ def eval_linear(
         avgpool_patchtokens=avgpool_patchtokens,
     )
     linear_classifier = linear.LinearClassifier(embed_dim, num_labels=2)
+
+    # attach to gpu/cpu
+    model = model.to(device)
+    linear_classifier = linear_classifier.to(device)
 
     # TODO: add transforms back into ds
     train_transform = transforms.Compose(
@@ -237,6 +242,7 @@ def eval_linear(
             epoch,
             n_last_blocks,
             avgpool_patchtokens,
+            device=device,
         )
         scheduler.step()
 
@@ -251,6 +257,7 @@ def eval_linear(
                 linear_classifier,
                 n_last_blocks,
                 avgpool_patchtokens,
+                device=device,
             )
             print(
                 f"Accuracy at epoch {epoch} of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%"
@@ -302,7 +309,8 @@ if __name__ == "__main__":
 
     training_data = Subset(_data, range(7665, 7670 + 5))  # range(6600, 7670 + 1670)
     dataset_val = Subset(_data, range(40, 51))
-
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using: {device}")
     eval_linear(
         training_data=training_data,
         dataset_val=dataset_val,
@@ -316,4 +324,5 @@ if __name__ == "__main__":
         checkpoint_key=checkpoint_key,
         checkpoints_dir=checkpoints_dir,
         resume=resume,
+        device=device,
     )
