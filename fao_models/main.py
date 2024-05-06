@@ -197,7 +197,8 @@ def eval_linear(
     # attach to gpu/cpu
     model = model.to(device)
     linear_classifier = linear_classifier.to(device)
-
+    print('model is cuda?',next(model.parameters()).is_cuda)
+    print('classifier is cuda?',next(linear_classifier.parameters()).is_cuda)
     # TODO: add transforms back into ds
     train_transform = transforms.Compose(
         [
