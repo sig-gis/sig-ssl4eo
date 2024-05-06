@@ -14,7 +14,7 @@ import typer
 from typing_extensions import Annotated
 import yaml
 
-from datasets.ssl4eo_dataset import SSL4EO, Subset
+from datasets.ssl4eo_dataset import SSL4EO, random_subset
 from models.dino import utils
 from models.dino import vision_transformer as vits
 from models.classification import linear
@@ -197,8 +197,8 @@ def eval_linear(
     # attach to gpu/cpu
     model = model.to(device)
     linear_classifier = linear_classifier.to(device)
-    print('model is cuda?',next(model.parameters()).is_cuda)
-    print('classifier is cuda?',next(linear_classifier.parameters()).is_cuda)
+    print("model is cuda?", next(model.parameters()).is_cuda)
+    print("classifier is cuda?", next(linear_classifier.parameters()).is_cuda)
     # TODO: add transforms back into ds
     train_transform = transforms.Compose(
         [
@@ -321,6 +321,8 @@ def main(config: str, test: Annotated[bool, typer.Option()] = False):
     checkpoints_dir = args["checkpoints_dir"]
     resume = args["resume"]
     checkpoint_key = args["checkpoint_key"]
+    random_subset_frac = args.get("random_subset_frac", 0)
+    seed = args.get("seed")
 
     _data_train = SSL4EO(
         root=imgs_training, mode="s2c", label=labels_training, normalize=False
@@ -329,10 +331,10 @@ def main(config: str, test: Annotated[bool, typer.Option()] = False):
         root=imgs_testing, mode="s2c", label=labels_testing, normalize=False
     )
     if test:
-        _data_train = Subset(
-            _data_train, range(7665, 7670 + 5)
-        )  # range(6600, 7670 + 1670)
-        _data_test = Subset(_data_test, range(40, 51))
+        _data_train = random_subset(_data_train, random_subset_frac, seed)
+        _data_test = random_subset(_data_train, random_subset_frac, seed)
+        print("train info", _data_train.info)
+        print("test info", _data_test.info)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using: {device}")

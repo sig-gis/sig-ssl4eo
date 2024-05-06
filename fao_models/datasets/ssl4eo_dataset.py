@@ -9,7 +9,8 @@ import pickle
 import torch
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
-#import lmdb
+
+# import lmdb
 from tqdm import tqdm
 
 
@@ -144,6 +145,17 @@ class SSL4EO(torch.utils.data.Dataset):
         if self.label is not None:
             self.label_df = pd.read_csv(self.label, header=None)
         self.length = len(self.ids)
+        self.info = {}
+        self._info()
+
+    def _info(self):
+        for idx in range(self.length):
+            l = self.get_label(idx)
+            v = self.info.get(l, None)
+            if v is None:
+                self.info[l] = 1
+            else:
+                self.info[l] += 1
 
     def __getitem__(self, index):
         target = None

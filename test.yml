@@ -15,3 +15,6 @@ batch_size: 8
 checkpoints_dir: dev_checkpoints
 resume: false
 checkpoint_key: teacher
+
+random_subset_frac: 0.01
+seed: 42
