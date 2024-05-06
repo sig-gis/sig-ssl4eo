@@ -1,0 +1,17 @@
+imgs_training: /Volumes/External/pc530/training/imgs
+labels_training: /Users/johndilger/Documents/projects/SSL4EO-S12/data/match_training_sample.csv
+
+imgs_testing: /Volumes/External/pc530/testing/imgs
+labels_testing: /Users/johndilger/Documents/projects/SSL4EO-S12/data/match_testing_sample.csv
+
+model_root: B13_vits16_dino_0099_ckpt.pth
+arch: vit_small
+epochs: 5
+avgpool_patchtokens: false
+patch_size: 16
+n_last_blocks: 4
+lr: 0.001
+batch_size: 8
+checkpoints_dir: dev_checkpoints
+resume: false
+checkpoint_key: teacher

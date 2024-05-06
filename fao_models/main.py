@@ -10,6 +10,9 @@ from torch import nn
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from sklearn.metrics import average_precision_score
+import typer
+from typing_extensions import Annotated
+import yaml
 
 from datasets.ssl4eo_dataset import SSL4EO, Subset
 from models.dino import utils
@@ -17,7 +20,7 @@ from models.dino import vision_transformer as vits
 from models.classification import linear
 
 
-def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool, device):
+def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool, device, arch):
     linear_classifier.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter("lr", utils.SmoothedValue(window_size=1, fmt="{value:.6f}"))
@@ -70,7 +73,7 @@ def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool, device
 
 
 @torch.no_grad()
-def validate_network(val_loader, model, linear_classifier, n, avgpool, device):
+def validate_network(val_loader, model, linear_classifier, n, avgpool, device, arch):
     linear_classifier.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = "Test:"
@@ -171,6 +174,7 @@ def eval_linear(
     batch_size: int,
     checkpoints_dir: str | Path,
     resume: bool,
+    epochs: int,
     checkpoint_key: str = "teacher",
 ):
     train_loader = DataLoader(
@@ -243,6 +247,7 @@ def eval_linear(
             n_last_blocks,
             avgpool_patchtokens,
             device=device,
+            arch=arch,
         )
         scheduler.step()
 
@@ -258,6 +263,7 @@ def eval_linear(
                 n_last_blocks,
                 avgpool_patchtokens,
                 device=device,
+                arch=arch,
             )
             print(
                 f"Accuracy at epoch {epoch} of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%"
@@ -285,44 +291,68 @@ def eval_linear(
     )
 
 
-if __name__ == "__main__":
-    root = "/Volumes/External/pc530/testing/imgs"
-    label = (
-        "/Users/johndilger/Documents/projects/SSL4EO-S12/data/match_training_sample.csv"
+def load_yml(_input: Path | str):
+    # TODO mv to common.py refactor other scripts to use
+    with open(_input, "r") as f:
+        args = yaml.safe_load(f)
+
+    # #tests for later maybe
+    # assert a1 == a2, "PAth and str are not same"
+    return args
+
+
+def main(config: str, test: Annotated[bool, typer.Option()] = False):
+    args = load_yml(config)
+    imgs_training = args["imgs_training"]
+    labels_training = args["labels_training"]
+
+    imgs_testing = args["imgs_testing"]
+    labels_testing = args["labels_testing"]
+
+    model_root = args["model_root"]
+    arch = args["arch"]
+    epochs = args["epochs"]
+    avgpool_patchtokens = args["avgpool_patchtokens"]
+    patch_size = args["patch_size"]
+    n_last_blocks = args["n_last_blocks"]
+    lr = args["lr"]
+    batch_size = args["batch_size"]
+    checkpoints_dir = args["checkpoints_dir"]
+    resume = args["resume"]
+    checkpoint_key = args["checkpoint_key"]
+
+    _data_train = SSL4EO(
+        root=imgs_training, mode="s2c", label=labels_training, normalize=False
     )
+    _data_test = SSL4EO(
+        root=imgs_testing, mode="s2c", label=labels_testing, normalize=False
+    )
+    if test:
+        _data_train = Subset(
+            _data_train, range(7665, 7670 + 5)
+        )  # range(6600, 7670 + 1670)
+        _data_test = Subset(_data_test, range(40, 51))
 
-    model_root = "B13_vits16_dino_0099_ckpt.pth"
-    arch = "vit_small"
-    avgpool_patchtokens = False
-    checkpoint_key = "teacher"
-    n_last_blocks = 4
-    patch_size = 16
-    pretrained = model_root
-
-    epochs = 5
-    lr = 0.001
-    checkpoints_dir = "dev_checkpoints"
-    resume = False
-    batch_size = 8
-
-    _data = SSL4EO(root=root, mode="s2c", label=label, normalize=False)
-
-    training_data = Subset(_data, range(7665, 7670 + 5))  # range(6600, 7670 + 1670)
-    dataset_val = Subset(_data, range(40, 51))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using: {device}")
+
     eval_linear(
-        training_data=training_data,
-        dataset_val=dataset_val,
+        training_data=_data_train,
+        dataset_val=_data_test,
         arch=arch,
-        pretrained=pretrained,
+        pretrained=model_root,
         avgpool_patchtokens=avgpool_patchtokens,
         patch_size=patch_size,
         n_last_blocks=n_last_blocks,
         lr=lr,
+        epochs=epochs,
         batch_size=batch_size,
         checkpoint_key=checkpoint_key,
         checkpoints_dir=checkpoints_dir,
         resume=resume,
         device=device,
     )
+
+
+if __name__ == "__main__":
+    typer.run(main)
