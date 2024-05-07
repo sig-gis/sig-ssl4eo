@@ -146,7 +146,7 @@ class SSL4EO(torch.utils.data.Dataset):
             self.label_df = pd.read_csv(self.label, header=None)
         self.length = len(self.ids)
         self.info = {}
-        self._info()
+       # self._info()
 
     def _info(self):
         for idx in range(self.length):
