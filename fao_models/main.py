@@ -63,7 +63,7 @@ def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool, device
         optimizer.step()
 
         # log
-        # torch.cuda.synchronize()
+        torch.cuda.synchronize()
         metric_logger.update(loss=loss.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
     # gather the stats from all processes
@@ -78,8 +78,8 @@ def validate_network(val_loader, model, linear_classifier, n, avgpool, device, a
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = "Test:"
     for images, target in metric_logger.log_every(val_loader, 20, header):
-        inp = images.type(torch.float32).to(device)
-        target = target.to(device)
+        inp = images.type(torch.float32).to(device, non_blocking=True)
+        target = target.to(device, non_blocking=True)
         # move to gpu
         # inp = inp.cuda(non_blocking=True)
 
@@ -113,7 +113,7 @@ def validate_network(val_loader, model, linear_classifier, n, avgpool, device, a
         score = torch.sigmoid(output).detach().cpu()
         acc1 = average_precision_score(target.cpu(), score, average="micro") * 100.0
         acc5 = acc1
-
+        
         batch_size = inp.shape[0]
         metric_logger.update(loss=loss.item())
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
@@ -175,13 +175,14 @@ def eval_linear(
     checkpoints_dir: str | Path,
     resume: bool,
     epochs: int,
+    num_workers:int,
     checkpoint_key: str = "teacher",
 ):
     train_loader = DataLoader(
-        training_data, batch_size=batch_size, shuffle=True, drop_last=True
+        training_data, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=num_workers,
     )
     val_loader = DataLoader(
-        dataset_val, batch_size=batch_size, shuffle=False, drop_last=True
+        dataset_val, batch_size=batch_size, shuffle=False, drop_last=True, num_workers=num_workers,
     )
 
     model, embed_dim = load_base_model(
@@ -322,6 +323,7 @@ def main(config: str, test: Annotated[bool, typer.Option()] = False):
     resume = args["resume"]
     checkpoint_key = args["checkpoint_key"]
     random_subset_frac = args.get("random_subset_frac", 0)
+    num_workers = args.get("num_workers",0)
     seed = args.get("seed")
 
     _data_train = SSL4EO(
@@ -338,7 +340,7 @@ def main(config: str, test: Annotated[bool, typer.Option()] = False):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using: {device}")
-
+    print(f"testing size:{len(_data_test)}")
     eval_linear(
         training_data=_data_train,
         dataset_val=_data_test,
@@ -354,6 +356,7 @@ def main(config: str, test: Annotated[bool, typer.Option()] = False):
         checkpoints_dir=checkpoints_dir,
         resume=resume,
         device=device,
+        num_workers=num_workers,
     )
 
 
