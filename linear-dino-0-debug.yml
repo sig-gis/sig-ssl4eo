@@ -12,9 +12,9 @@ patch_size: 16
 n_last_blocks: 4
 lr: 0.001
 batch_size: 32
-checkpoints_dir: linear-dino-0
-resume: true
+checkpoints_dir: linear-dino-0-debug
+resume: false
 checkpoint_key: teacher
 seed: 42
-random_subset_frac: 0.01
-num_workers: 10 
+random_subset_frac: 0.05
+num_workers: 16 
