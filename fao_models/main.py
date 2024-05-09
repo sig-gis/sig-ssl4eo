@@ -1,4 +1,3 @@
-import argparse
 import sys
 import os
 from pathlib import Path
@@ -13,6 +12,7 @@ from sklearn.metrics import average_precision_score
 import typer
 from typing_extensions import Annotated
 import yaml
+from torchmetrics.classification import BinaryF1Score
 
 from datasets.ssl4eo_dataset import SSL4EO, random_subset
 from models.dino import utils
@@ -27,10 +27,7 @@ def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool, device
     header = "Epoch: [{}]".format(epoch)
     for images, target in metric_logger.log_every(loader, 20, header):
         inp = images.type(torch.float32).to(device)
-        target = target.to(device)
-        # move to gpu
-        # inp = inp.cuda(non_blocking=True)
-        # target = target.cuda(non_blocking=True)
+        target = target.to(device).float()
 
         # forward
         with torch.no_grad():
@@ -53,7 +50,7 @@ def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool, device
         output = linear_classifier(output)
 
         # compute cross entropy loss
-        loss = nn.MultiLabelSoftMarginLoss()(output, target.long())
+        loss = nn.BCELoss()(output, torch.unsqueeze(target, 1))
 
         # compute the gradients
         optimizer.zero_grad()
@@ -63,7 +60,7 @@ def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool, device
         optimizer.step()
 
         # log
-        torch.cuda.synchronize()
+        # torch.cuda.synchronize()
         metric_logger.update(loss=loss.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
     # gather the stats from all processes
@@ -79,9 +76,7 @@ def validate_network(val_loader, model, linear_classifier, n, avgpool, device, a
     header = "Test:"
     for images, target in metric_logger.log_every(val_loader, 20, header):
         inp = images.type(torch.float32).to(device, non_blocking=True)
-        target = target.to(device, non_blocking=True)
-        # move to gpu
-        # inp = inp.cuda(non_blocking=True)
+        target = target.to(device, non_blocking=True).float()
 
         # forward
         with torch.no_grad():
@@ -102,39 +97,21 @@ def validate_network(val_loader, model, linear_classifier, n, avgpool, device, a
             else:
                 output = model(inp)
         output = linear_classifier(output)
-        loss = nn.MultiLabelSoftMarginLoss()(output, target.long())
+        loss = nn.BCELoss()(output, torch.unsqueeze(target, 1))
 
-        """
-        if linear_classifier.module.num_labels >= 5:
-            acc1, acc5 = utils.accuracy(output, target, topk=(1, 5))
-        else:
-            acc1, = utils.accuracy(output, target, topk=(1,))
-        """
-        score = torch.sigmoid(output).detach().cpu()
-        acc1 = average_precision_score(target.cpu(), score, average="micro") * 100.0
-        acc5 = acc1
-        
+        acc1 = average_precision_score(target.cpu(), output, average="micro") * 100.0
+        acc2 = BinaryF1Score()(output, torch.unsqueeze(target, 1))
+
         batch_size = inp.shape[0]
         metric_logger.update(loss=loss.item())
-        metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
-
-        if linear_classifier.num_labels >= 5:
-            metric_logger.meters["acc5"].update(acc5.item(), n=batch_size)
-
-    if linear_classifier.num_labels >= 5:
-        print(
-            "* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}".format(
-                top1=metric_logger.acc1,
-                top5=metric_logger.acc5,
-                losses=metric_logger.loss,
-            )
+        metric_logger.meters["average_precision_score"].update(
+            acc1.item(), n=batch_size
         )
-    else:
-        print(
-            "* Acc@1 {top1.global_avg:.3f} loss {losses.global_avg:.3f}".format(
-                top1=metric_logger.acc1, losses=metric_logger.loss
-            )
-        )
+        metric_logger.meters["binary_f1_score"].update(acc2.item(), n=batch_size)
+
+    print(
+        f"* Average Precision: {metric_logger.average_precision_score.global_avg:.3f} F1: {metric_logger.binary_f1_score.global_avg:.3f} loss: {metric_logger.loss.global_avg:.3f}"
+    )
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 
@@ -175,14 +152,22 @@ def eval_linear(
     checkpoints_dir: str | Path,
     resume: bool,
     epochs: int,
-    num_workers:int,
+    num_workers: int,
     checkpoint_key: str = "teacher",
 ):
     train_loader = DataLoader(
-        training_data, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=num_workers,
+        training_data,
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=True,
+        num_workers=num_workers,
     )
     val_loader = DataLoader(
-        dataset_val, batch_size=batch_size, shuffle=False, drop_last=True, num_workers=num_workers,
+        dataset_val,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=True,
+        num_workers=num_workers,
     )
 
     model, embed_dim = load_base_model(
@@ -193,7 +178,7 @@ def eval_linear(
         n_last_blocks=n_last_blocks,
         avgpool_patchtokens=avgpool_patchtokens,
     )
-    linear_classifier = linear.LinearClassifier(embed_dim, num_labels=2)
+    linear_classifier = linear.LinearClassifier(embed_dim, num_labels=1)
 
     # attach to gpu/cpu
     model = model.to(device)
@@ -268,9 +253,9 @@ def eval_linear(
             arch=arch,
         )
         print(
-            f"Accuracy at epoch {epoch} of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%"
+            f"Accuracy at epoch {epoch} of the network on the {len(dataset_val)} test images: {test_stats['average_precision_score']:.1f}%"
         )
-        best_acc = max(best_acc, test_stats["acc1"])
+        best_acc = max(best_acc, test_stats["average_precision_score"])
         print(f"Max accuracy so far: {best_acc:.2f}%")
         log_stats = {
             **{k: v for k, v in log_stats.items()},
@@ -323,7 +308,7 @@ def main(config: str, test: Annotated[bool, typer.Option()] = False):
     resume = args["resume"]
     checkpoint_key = args["checkpoint_key"]
     random_subset_frac = args.get("random_subset_frac", 0)
-    num_workers = args.get("num_workers",0)
+    num_workers = args.get("num_workers", 0)
     seed = args.get("seed")
 
     _data_train = SSL4EO(
@@ -335,8 +320,8 @@ def main(config: str, test: Annotated[bool, typer.Option()] = False):
     if test:
         _data_train = random_subset(_data_train, random_subset_frac, seed)
         _data_test = random_subset(_data_train, random_subset_frac, seed)
-        print("train info", _data_train.info)
-        print("test info", _data_test.info)
+        # print("train info", _data_train.info)
+        # print("test info", _data_test.info)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using: {device}")
