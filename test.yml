@@ -1,20 +1,20 @@
-imgs_training: /Volumes/External/pc530/training/imgs
-labels_training: /Users/johndilger/Documents/projects/SSL4EO-S12/data/match_training_sample.csv
+imgs_training: "/Volumes/External/pc530/training/imgs"
+labels_training: fao_models/data/match_training_sample.csv
 
-imgs_testing: /Volumes/External/pc530/testing/imgs
-labels_testing: /Users/johndilger/Documents/projects/SSL4EO-S12/data/match_testing_sample.csv
+imgs_testing: "/Volumes/External/pc530/testing/imgs"
+labels_testing: fao_models/data/match_testing_sample.csv
 
 model_root: B13_vits16_dino_0099_ckpt.pth
 arch: vit_small
-epochs: 5
+epochs: 15
 avgpool_patchtokens: false
 patch_size: 16
 n_last_blocks: 4
 lr: 0.001
-batch_size: 8
-checkpoints_dir: dev_checkpoints
+batch_size: 4
+checkpoints_dir: linear-dino-2
 resume: false
 checkpoint_key: teacher
-
-random_subset_frac: 0.01
 seed: 42
+random_subset_frac: 0.005
+num_workers: 0
