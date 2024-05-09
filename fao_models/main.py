@@ -18,6 +18,7 @@ from datasets.ssl4eo_dataset import SSL4EO, random_subset
 from models.dino import utils
 from models.dino import vision_transformer as vits
 from models.classification import linear
+from _types import Config
 
 
 def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool, device, arch):
@@ -289,37 +290,17 @@ def load_yml(_input: Path | str):
 
 
 def main(config: str, test: Annotated[bool, typer.Option()] = False):
-    args = load_yml(config)
-    imgs_training = args["imgs_training"]
-    labels_training = args["labels_training"]
-
-    imgs_testing = args["imgs_testing"]
-    labels_testing = args["labels_testing"]
-
-    model_root = args["model_root"]
-    arch = args["arch"]
-    epochs = args["epochs"]
-    avgpool_patchtokens = args["avgpool_patchtokens"]
-    patch_size = args["patch_size"]
-    n_last_blocks = args["n_last_blocks"]
-    lr = args["lr"]
-    batch_size = args["batch_size"]
-    checkpoints_dir = args["checkpoints_dir"]
-    resume = args["resume"]
-    checkpoint_key = args["checkpoint_key"]
-    random_subset_frac = args.get("random_subset_frac", 0)
-    num_workers = args.get("num_workers", 0)
-    seed = args.get("seed")
+    args = Config(**load_yml(config))
 
     _data_train = SSL4EO(
-        root=imgs_training, mode="s2c", label=labels_training, normalize=False
+        root=args.imgs_training, mode="s2c", label=args.labels_training, normalize=False
     )
     _data_test = SSL4EO(
-        root=imgs_testing, mode="s2c", label=labels_testing, normalize=False
+        root=args.imgs_testing, mode="s2c", label=args.labels_testing, normalize=False
     )
     if test:
-        _data_train = random_subset(_data_train, random_subset_frac, seed)
-        _data_test = random_subset(_data_train, random_subset_frac, seed)
+        _data_train = random_subset(_data_train, args.random_subset_frac, args.seed)
+        _data_test = random_subset(_data_train, args.random_subset_frac, args.seed)
         # print("train info", _data_train.info)
         # print("test info", _data_test.info)
 
@@ -329,19 +310,19 @@ def main(config: str, test: Annotated[bool, typer.Option()] = False):
     eval_linear(
         training_data=_data_train,
         dataset_val=_data_test,
-        arch=arch,
-        pretrained=model_root,
-        avgpool_patchtokens=avgpool_patchtokens,
-        patch_size=patch_size,
-        n_last_blocks=n_last_blocks,
-        lr=lr,
-        epochs=epochs,
-        batch_size=batch_size,
-        checkpoint_key=checkpoint_key,
-        checkpoints_dir=checkpoints_dir,
-        resume=resume,
+        arch=args.arch,
+        pretrained=args.model_root,
+        avgpool_patchtokens=args.avgpool_patchtokens,
+        patch_size=args.patch_size,
+        n_last_blocks=args.n_last_blocks,
+        lr=args.lr,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        checkpoint_key=args.checkpoint_key,
+        checkpoints_dir=args.checkpoints_dir,
+        resume=args.resume,
         device=device,
-        num_workers=num_workers,
+        num_workers=args.num_workers,
     )
 
 
