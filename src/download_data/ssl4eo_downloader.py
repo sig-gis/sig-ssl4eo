@@ -108,7 +108,7 @@ def filter_collection(
 
     if filtered.limit(1).size().getInfo() == 0:
         raise ee.EEException(
-            f"ImageCollection.filter: No suitable images found in ({coords[1]:.4f}, {coords[0]:.4f}) between {period[0]} and {period[1]}."  # noqa: E501
+            f"ImageCollection.filter: No suitable images found in ({coords[1]:.4f}, {coords[0]:.4f}) between {start_date.getInfo()} and {end_date.getInfo()}."  # noqa: E501
         )
     return filtered
 
@@ -226,7 +226,7 @@ def get_patch_by_match(
         )
 
     except (ee.EEException, urllib3.exceptions.HTTPError) as e:
-        raise e
+        print(e)
         return None, coords
 
     return patches, coords
@@ -317,7 +317,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--year",
         type=str,
-        # nargs="+",
         default="2018",
         help="The year from which to grab samples from",
     )
