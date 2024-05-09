@@ -257,25 +257,25 @@ def eval_linear(
             **{f"train_{k}": v for k, v in train_stats.items()},
             "epoch": epoch,
         }
-        if epoch == epochs - 1:
-            test_stats = validate_network(
-                val_loader,
-                model,
-                linear_classifier,
-                n_last_blocks,
-                avgpool_patchtokens,
-                device=device,
-                arch=arch,
-            )
-            print(
-                f"Accuracy at epoch {epoch} of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%"
-            )
-            best_acc = max(best_acc, test_stats["acc1"])
-            print(f"Max accuracy so far: {best_acc:.2f}%")
-            log_stats = {
-                **{k: v for k, v in log_stats.items()},
-                **{f"test_{k}": v for k, v in test_stats.items()},
-            }
+        # if epoch == epochs - 1:
+        test_stats = validate_network(
+            val_loader,
+            model,
+            linear_classifier,
+            n_last_blocks,
+            avgpool_patchtokens,
+            device=device,
+            arch=arch,
+        )
+        print(
+            f"Accuracy at epoch {epoch} of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%"
+        )
+        best_acc = max(best_acc, test_stats["acc1"])
+        print(f"Max accuracy so far: {best_acc:.2f}%")
+        log_stats = {
+            **{k: v for k, v in log_stats.items()},
+            **{f"test_{k}": v for k, v in test_stats.items()},
+        }
         if utils.is_main_process():
             with (Path(checkpoints_dir) / "log.txt").open("a") as f:
                 f.write(json.dumps(log_stats) + "\n")
