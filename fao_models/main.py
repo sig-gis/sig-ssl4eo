@@ -100,8 +100,8 @@ def validate_network(val_loader, model, linear_classifier, n, avgpool, device, a
         output = linear_classifier(output)
         loss = nn.BCELoss()(output, torch.unsqueeze(target, 1))
 
-        acc1 = average_precision_score(target.cpu(), output, average="micro") * 100.0
-        acc2 = BinaryF1Score()(output, torch.unsqueeze(target, 1))
+        acc1 = average_precision_score(target.cpu(), output.cpu(), average="micro") * 100.0
+        acc2 = BinaryF1Score()(output.cpu(), torch.unsqueeze(target, 1).cpu())
 
         batch_size = inp.shape[0]
         metric_logger.update(loss=loss.item())
