@@ -9,16 +9,11 @@ from torch import nn
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from sklearn.metrics import average_precision_score
-import typer
-from typing_extensions import Annotated
-import yaml
 from torchmetrics.classification import BinaryF1Score
 
-from datasets.ssl4eo_dataset import SSL4EO, random_subset
 from models.dino import utils
 from models.dino import vision_transformer as vits
 from models.classification import linear
-from _types import Config
 
 
 def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool, device, arch):
@@ -100,7 +95,9 @@ def validate_network(val_loader, model, linear_classifier, n, avgpool, device, a
         output = linear_classifier(output)
         loss = nn.BCELoss()(output, torch.unsqueeze(target, 1))
 
-        acc1 = average_precision_score(target.cpu(), output.cpu(), average="micro") * 100.0
+        acc1 = (
+            average_precision_score(target.cpu(), output.cpu(), average="micro") * 100.0
+        )
         acc2 = BinaryF1Score()(output.cpu(), torch.unsqueeze(target, 1).cpu())
 
         batch_size = inp.shape[0]
@@ -277,54 +274,3 @@ def eval_linear(
         "Training of the supervised linear classifier on frozen features completed.\n"
         "Top-1 test accuracy: {acc:.1f}".format(acc=best_acc)
     )
-
-
-def load_yml(_input: Path | str):
-    # TODO mv to common.py refactor other scripts to use
-    with open(_input, "r") as f:
-        args = yaml.safe_load(f)
-
-    # #tests for later maybe
-    # assert a1 == a2, "PAth and str are not same"
-    return args
-
-
-def main(config: str, test: Annotated[bool, typer.Option()] = False):
-    args = Config(**load_yml(config))
-
-    _data_train = SSL4EO(
-        root=args.imgs_training, mode="s2c", label=args.labels_training, normalize=False
-    )
-    _data_test = SSL4EO(
-        root=args.imgs_testing, mode="s2c", label=args.labels_testing, normalize=False
-    )
-    if test:
-        _data_train = random_subset(_data_train, args.random_subset_frac, args.seed)
-        _data_test = random_subset(_data_train, args.random_subset_frac, args.seed)
-        # print("train info", _data_train.info)
-        # print("test info", _data_test.info)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using: {device}")
-    print(f"testing size:{len(_data_test)}")
-    eval_linear(
-        training_data=_data_train,
-        dataset_val=_data_test,
-        arch=args.arch,
-        pretrained=args.model_root,
-        avgpool_patchtokens=args.avgpool_patchtokens,
-        patch_size=args.patch_size,
-        n_last_blocks=args.n_last_blocks,
-        lr=args.lr,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        checkpoint_key=args.checkpoint_key,
-        checkpoints_dir=args.checkpoints_dir,
-        resume=args.resume,
-        device=device,
-        num_workers=args.num_workers,
-    )
-
-
-if __name__ == "__main__":
-    typer.run(main)
