@@ -44,7 +44,6 @@ class SSL4EOFlow(FlowSpec):
 
     samples = Parameter(name="samples", type=str, help="The path to a csv of samples.")
     config = Parameter(name="config", type=str, help="The path to a model config.")
-    b: str = "lol"
 
     def load_model(self):
         print("i ran")
@@ -52,16 +51,38 @@ class SSL4EOFlow(FlowSpec):
 
     @step
     def start(self):
+        """load csv, initialize config."""
+        from common import load_yml
+        from _types import Config
 
         samples = pd.read_csv(self.samples)
-        # download imagery
         self._samples = samples.to_dict(orient="records")
+        self._config = Config(**load_yml(self.config))
+
+        self.next(self.load_model)
+
+    @step
+    def load_model(self):
+        from main import load_base_model
+        from models.classification import linear
+
+        c = self._config
+        self.model, embed_dim = load_base_model(
+            pretrained=c.model_root,
+            checkpoint_key=c.checkpoint_key,
+            arch=c.arch,
+            patch_size=c.patch_size,
+            n_last_blocks=c.n_last_blocks,
+            avgpool_patchtokens=c.avgpool_patchtokens,
+        )
+        self.linear_classifier = linear.LinearClassifier(embed_dim, num_labels=1)
 
         self.next(self.get_imagery, foreach="_samples")
 
     @step
     def get_imagery(self):
         from download_data.download_wraper import single_patch
+        from pathlib import Path
         import ee
         import google.auth
 
@@ -72,29 +93,53 @@ class SSL4EOFlow(FlowSpec):
             project=PROJECT,
             opt_url="https://earthengine-highvolume.googleapis.com",
         )
+
         # download imagery
         self.sample = self.input
         coords = (self.sample["long"], self.sample["lat"])
-        self.img_root = single_patch(
-            coords, dst="testing123", year=2019, bands=BANDS, crop_dimensions=CROPS
+        local_root = Path(__file__).parent
+        img_root = single_patch(
+            coords,
+            id=self.sample["id"],
+            dst=local_root / "testing123",
+            year=2019,
+            bands=BANDS,
+            crop_dimensions=CROPS,
         )
-        print(self.sample)
+        self.sample["img_root"] = img_root
         self.next(self.run_model)
 
     @step
     def run_model(self):
-        print(self.img_root)
+        import torch
+        from datasets.ssl4eo_dataset import SSL4EO
+
+        _dataset = SSL4EO(
+            root=self.sample["img_root"].parent,
+            mode="s2c",
+            normalize=False,  # todo add normalized to self._config.
+        )
+
+        image = _dataset[0]
+        image = torch.unsqueeze(torch.tensor(image), 0).type(torch.float32)
+        self.linear_classifier.eval()
+        with torch.no_grad():
+            intermediate_output = self.model.get_intermediate_layers(
+                image, self._config.n_last_blocks
+            )
+            output = torch.cat([x[:, 0] for x in intermediate_output], dim=-1)
+
+        output = self.linear_classifier(output)
+        self.sample["label"] = output.detach().cpu()
         self.next(self.join_res)
 
     @step
     def join_res(self, inputs):
-        # print("in join", inputs.sample)
-        # print("in join", inputs.img_root)
+        print("join res:::::", [i.sample for i in inputs])
         self.next(self.end)
 
     @step
     def end(self):
-        print(self.b)
         print("fin")
 
 
