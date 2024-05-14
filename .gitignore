@@ -8,3 +8,5 @@
 **/ssl4eo-s12_100patches/*
 *.png
 data/*
+.metaflow
+metaflow-tutorials
