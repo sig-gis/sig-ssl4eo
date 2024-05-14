@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 import numpy as np
 import rasterio
 import torch
@@ -129,9 +129,9 @@ class SSL4EO(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        root,
-        label=Path | None,
-        normalize=False,
+        root: Path | str,
+        label: Optional[Path | str] = None,
+        normalize: bool = False,
         mode: Literal["s1", "s2a", "s2c"] = "s2c",
         dtype="uint8",
     ):
@@ -178,8 +178,8 @@ class SSL4EO(torch.utils.data.Dataset):
         if self.label is not None:
             target = self.get_label(index)
             target = target.astype(img.dtype)
-
-        return img, target
+            return img, target
+        return img
 
     def __len__(self):
         return self.length
