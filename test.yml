@@ -1,23 +1,29 @@
+# image locations
 imgs_training: "/Volumes/External/pc530/training/imgs"
 labels_training: fao_models/data/match_training_sample.csv
 
 imgs_testing: "/Volumes/External/pc530/testing/imgs"
 labels_testing: fao_models/data/match_testing_sample.csv
 
+# model params
 model_root: B13_vits16_dino_0099_ckpt.pth
 model_head_root: linear-dino-2/checkpoint.pth.tar
 model_name: 'linear-dino'
+resume: false
 
-arch: vit_small
+# training params
+checkpoints_dir: test-dev
 epochs: 15
+lr: 0.001
+batch_size: 4
+num_workers: 0
+random_subset_frac: 0.005
+
+# base model params
+arch: vit_small
 avgpool_patchtokens: false
 patch_size: 16
 n_last_blocks: 4
-lr: 0.001
-batch_size: 4
-checkpoints_dir: test-dev
-resume: false
 checkpoint_key: teacher
 seed: 42
-random_subset_frac: 0.005
-num_workers: 0
+
