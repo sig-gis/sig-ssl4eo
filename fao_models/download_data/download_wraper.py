@@ -13,6 +13,7 @@ import tempfile
 
 def single_patch(
     coords: tuple[float, float],
+    id: str | int,
     year: int,
     dst: str | Path,
     collection: str = "COPERNICUS/S2",
@@ -36,7 +37,7 @@ def single_patch(
         raise RuntimeError("no suitable image found")
     td = Path(dst)
     td.name
-    root = td / "0"
+    root = td / str(id) / str(id)
 
     save_patch(
         raster=patch["raster"],
