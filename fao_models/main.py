@@ -12,8 +12,7 @@ from sklearn.metrics import average_precision_score
 from torchmetrics.classification import BinaryF1Score
 
 from models.dino import utils
-from models.dino import vision_transformer as vits
-from models.classification import linear
+from models._models import get_model
 
 
 def train(model, linear_classifier, optimizer, loader, epoch, n, avgpool, device, arch):
@@ -113,35 +112,12 @@ def validate_network(val_loader, model, linear_classifier, n, avgpool, device, a
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 
-def load_base_model(
-    arch: str,
-    patch_size: int,
-    n_last_blocks: int,
-    avgpool_patchtokens: bool,
-    pretrained: str | Path,
-    checkpoint_key: str,
-):
-    if arch in vits.__dict__.keys():
-        model = vits.__dict__[arch](patch_size=patch_size, num_classes=0, in_chans=13)
-        embed_dim = model.embed_dim * (n_last_blocks + int(avgpool_patchtokens))
-    else:
-        print(f"Unknow architecture: {arch}")
-        sys.exit(1)
-    model.cpu()
-    model.eval()
-    # load weights to evaluate
-    utils.load_pretrained_weights(model, pretrained, checkpoint_key, arch, patch_size)
-
-    print(f"Model {arch} built.")
-    return model, embed_dim
-
-
 def eval_linear(
     training_data: torch.utils.data.Dataset,
     dataset_val: torch.utils.data.Dataset,
     arch: Literal["vit_small"],
     device: str,
-    pretrained: str | Path,
+    model_root: str | Path,
     avgpool_patchtokens: bool,
     patch_size: int,
     n_last_blocks: int,
@@ -168,16 +144,15 @@ def eval_linear(
         num_workers=num_workers,
     )
 
-    model, embed_dim = load_base_model(
-        pretrained=pretrained,
+    model, linear_classifier = get_model(
+        model_name="linear-dino",
+        model_root=model_root,
         checkpoint_key=checkpoint_key,
         arch=arch,
         patch_size=patch_size,
         n_last_blocks=n_last_blocks,
         avgpool_patchtokens=avgpool_patchtokens,
     )
-    linear_classifier = linear.LinearClassifier(embed_dim, num_labels=1)
-
     # attach to gpu/cpu
     model = model.to(device)
     linear_classifier = linear_classifier.to(device)
