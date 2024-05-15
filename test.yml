@@ -5,6 +5,9 @@ imgs_testing: "/Volumes/External/pc530/testing/imgs"
 labels_testing: fao_models/data/match_testing_sample.csv
 
 model_root: B13_vits16_dino_0099_ckpt.pth
+model_head_root: linear-dino-2/checkpoint.pth.tar
+model_name: 'linear-dino'
+
 arch: vit_small
 epochs: 15
 avgpool_patchtokens: false
