@@ -1,26 +1,7 @@
-# flow outline
-# inputs:
-#   -csv_plots
-#   -config:
-#   -output_dir
-# output:
-#   -csv_predicted_plots
-
-# step1
-# - load the csv
-# for each plot
-# -step2
-# load model
-# predict
-# return json/objct
-# step 4
-# update csv with results
-# step 5 fin
+from pathlib import Path
 
 from metaflow import FlowSpec, step, Parameter
 import pandas as pd
-import rasterio as rio
-
 
 BANDS = [
     "B1",
@@ -38,16 +19,13 @@ BANDS = [
     "B12",
 ]
 CROPS = [44, 264, 264, 264, 132, 132, 132, 264, 132, 44, 44, 132, 132]
+PROJECT = "pc530-fao-fra-rss"
 
 
 class SSL4EOFlow(FlowSpec):
 
     samples = Parameter(name="samples", type=str, help="The path to a csv of samples.")
     config = Parameter(name="config", type=str, help="The path to a model config.")
-
-    def load_model(self):
-        print("i ran")
-        return pd.read_csv("fao_models/data/match_dev.csv").to_dict(orient="records")
 
     @step
     def start(self):
@@ -63,30 +41,27 @@ class SSL4EOFlow(FlowSpec):
 
     @step
     def load_model(self):
-        from main import load_base_model
+        from models._models import get_model
         from models.classification import linear
+        from models.dino.utils import restart_from_checkpoint
+        import os
 
         c = self._config
-        self.model, embed_dim = load_base_model(
-            pretrained=c.model_root,
-            checkpoint_key=c.checkpoint_key,
-            arch=c.arch,
-            patch_size=c.patch_size,
-            n_last_blocks=c.n_last_blocks,
-            avgpool_patchtokens=c.avgpool_patchtokens,
+        self.model, self.linear_classifier = get_model(**c.__dict__)
+        restart_from_checkpoint(
+            os.path.join(c.model_head_root),
+            state_dict=self.linear_classifier,
         )
-        self.linear_classifier = linear.LinearClassifier(embed_dim, num_labels=1)
 
         self.next(self.get_imagery, foreach="_samples")
 
     @step
     def get_imagery(self):
         from download_data.download_wraper import single_patch
-        from pathlib import Path
+
         import ee
         import google.auth
 
-        PROJECT = "pc530-fao-fra-rss"
         credentials, _ = google.auth.default()
         ee.Initialize(
             credentials,
@@ -122,6 +97,7 @@ class SSL4EOFlow(FlowSpec):
 
         image = _dataset[0]
         image = torch.unsqueeze(torch.tensor(image), 0).type(torch.float32)
+
         self.linear_classifier.eval()
         with torch.no_grad():
             intermediate_output = self.model.get_intermediate_layers(
@@ -130,12 +106,22 @@ class SSL4EOFlow(FlowSpec):
             output = torch.cat([x[:, 0] for x in intermediate_output], dim=-1)
 
         output = self.linear_classifier(output)
-        self.sample["label"] = output.detach().cpu()
+        self.sample["prob_label"] = output.detach().cpu().item()
+        self.sample["pred_label"] = round(self.sample["prob_label"])
         self.next(self.join_res)
 
     @step
     def join_res(self, inputs):
-        print("join res:::::", [i.sample for i in inputs])
+        out = (
+            pd.DataFrame(
+                [i.sample for i in inputs],
+            )
+            .reset_index()
+            .sort_values("id")
+        )
+        columns_save = ["id", "long", "lat", "prob_label", "pred_label", "label"]
+        out[columns_save].to_csv(Path(__file__).parent / "flowout.csv")
+
         self.next(self.end)
 
     @step
