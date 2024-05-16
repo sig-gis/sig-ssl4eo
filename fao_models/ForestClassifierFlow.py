@@ -26,6 +26,13 @@ class SSL4EOFlow(FlowSpec):
 
     samples = Parameter(name="samples", type=str, help="The path to a csv of samples.")
     config = Parameter(name="config", type=str, help="The path to a model config.")
+    dst = Parameter(name="dst", type=str, help="The path to save the resulting csv.")
+
+    def check_dst(self, dst):
+        dst = Path(dst)
+        if dst.is_file() == False:
+            dst = dst / "flowout.csv"
+        return dst
 
     @step
     def start(self):
@@ -36,13 +43,14 @@ class SSL4EOFlow(FlowSpec):
         samples = pd.read_csv(self.samples)
         self._samples = samples.to_dict(orient="records")
         self._config = Config(**load_yml(self.config))
+        self._dst = self.check_dst(self.dst)
 
         self.next(self.load_model)
 
     @step
     def load_model(self):
+        """load model"""
         from models._models import get_model
-        from models.classification import linear
         from models.dino.utils import restart_from_checkpoint
         import os
 
@@ -57,6 +65,7 @@ class SSL4EOFlow(FlowSpec):
 
     @step
     def get_imagery(self):
+        """download imagery"""
         from download_data.download_wraper import single_patch
 
         import ee
@@ -69,14 +78,14 @@ class SSL4EOFlow(FlowSpec):
             opt_url="https://earthengine-highvolume.googleapis.com",
         )
 
-        # download imagery
+        #
         self.sample = self.input
         coords = (self.sample["long"], self.sample["lat"])
-        local_root = Path(__file__).parent
+        local_root = self._dst.parent
         img_root = single_patch(
             coords,
             id=self.sample["id"],
-            dst=local_root / "testing123",
+            dst=local_root / "imgs",
             year=2019,
             bands=BANDS,
             crop_dimensions=CROPS,
@@ -89,13 +98,13 @@ class SSL4EOFlow(FlowSpec):
         import torch
         from datasets.ssl4eo_dataset import SSL4EO
 
-        _dataset = SSL4EO(
+        dataset = SSL4EO(
             root=self.sample["img_root"].parent,
             mode="s2c",
             normalize=False,  # todo add normalized to self._config.
         )
 
-        image = _dataset[0]
+        image = dataset[0]
         image = torch.unsqueeze(torch.tensor(image), 0).type(torch.float32)
 
         self.linear_classifier.eval()
@@ -108,19 +117,16 @@ class SSL4EOFlow(FlowSpec):
         output = self.linear_classifier(output)
         self.sample["prob_label"] = output.detach().cpu().item()
         self.sample["pred_label"] = round(self.sample["prob_label"])
-        self.next(self.join_res)
+        self.next(self.join_results)
 
     @step
-    def join_res(self, inputs):
-        out = (
-            pd.DataFrame(
-                [i.sample for i in inputs],
-            )
-            .reset_index()
-            .sort_values("id")
-        )
+    def join_results(self, inputs):
+        self.out = pd.DataFrame(
+            [i.sample for i in inputs],
+        ).sort_values("id")
+        self.merge_artifacts(inputs, include=["_dst"])
         columns_save = ["id", "long", "lat", "prob_label", "pred_label", "label"]
-        out[columns_save].to_csv(Path(__file__).parent / "flowout.csv")
+        self.out[columns_save].to_csv(self._dst, index=False)
 
         self.next(self.end)
 
