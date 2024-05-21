@@ -1,9 +1,8 @@
 import collections
-from pathlib import PosixPath
+
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.io import ReadFromCsv, WriteToCsv, WriteToText
-from apache_beam.dataframe.io import read_csv, to_csv
+from apache_beam.io import ReadFromCsv, WriteToText
 
 P = "/Users/johndilger/Documents/projects/SSL4EO-S12/fao_models/data/match_dev.csv"
 O = "/Users/johndilger/Documents/projects/SSL4EO-S12/fao_models/beamout.csv"
@@ -176,10 +175,6 @@ class GetImagery(beam.DoFn):
         }
 
 
-def dict_to_row(d):
-    return beam.Row(**d)
-
-
 beam_options = PipelineOptions()
 cols = ["id", "long", "lat", "prob_label", "pred_label"]
 with beam.Pipeline() as p:
@@ -188,11 +183,6 @@ with beam.Pipeline() as p:
         | "read input data" >> ReadFromCsv(P)
         | "download imagery" >> beam.ParDo(GetImagery(dst=TMP)).with_output_types(dict)
         | "predict" >> beam.ParDo(Predict(config_path=CONFIG)).with_output_types(dict)
-        # | "convert to rows" >> beam.Map(dict_to_row)
         | "to csv str" >> beam.ParDo(DictToCSVString(cols))
-        # | "write to csv" >> WriteToCsv(O)  # beam.Map(print)
         | "write to csv" >> WriteToText(O, header=",".join(cols))
     )
-
-
-# build your pipeline here
