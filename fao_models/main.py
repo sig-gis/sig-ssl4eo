@@ -10,6 +10,8 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 from sklearn.metrics import average_precision_score
 from torchmetrics.classification import BinaryF1Score
+from torchmetrics.classification import BinaryPrecision
+from torchmetrics.classification import BinaryRecall
 
 from models.dino import utils
 from models._models import get_model
@@ -97,7 +99,11 @@ def validate_network(val_loader, model, linear_classifier, n, avgpool, device, a
         acc1 = (
             average_precision_score(target.cpu(), output.cpu(), average="micro") * 100.0
         )
-        acc2 = BinaryF1Score()(output.cpu(), torch.unsqueeze(target, 1).cpu())
+        _output = output.cpu()
+        _target = torch.unsqueeze(target, 1).cpu()
+        acc2 = BinaryF1Score()(_output, _target)
+        acc3 = BinaryPrecision()(_output, _target)
+        acc4 = BinaryRecall()(_output, _target)
 
         batch_size = inp.shape[0]
         metric_logger.update(loss=loss.item())
@@ -105,9 +111,15 @@ def validate_network(val_loader, model, linear_classifier, n, avgpool, device, a
             acc1.item(), n=batch_size
         )
         metric_logger.meters["binary_f1_score"].update(acc2.item(), n=batch_size)
+        metric_logger.meters["binary_precision_score"].update(acc2.item(), n=batch_size)
+        metric_logger.meters["binary_recall_score"].update(acc2.item(), n=batch_size)
 
     print(
-        f"* Average Precision: {metric_logger.average_precision_score.global_avg:.3f} F1: {metric_logger.binary_f1_score.global_avg:.3f} loss: {metric_logger.loss.global_avg:.3f}"
+        f"* Average Precision: {metric_logger.average_precision_score.global_avg:.3f} "
+        f"* F1: {metric_logger.binary_f1_score.global_avg:.3f} "
+        f"* Precision {metric_logger.binary_precision_score.global_avg:.3f} "
+        f"* Recall {metric_logger.binary_recall_score.global_avg:.3f} "
+        f"* loss: {metric_logger.loss.global_avg:.3f} "
     )
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
