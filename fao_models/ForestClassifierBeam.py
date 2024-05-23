@@ -1,14 +1,16 @@
 import collections
 import argparse
 from types import SimpleNamespace
+import csv
+import io
 
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.io import ReadFromCsv, WriteToText
 
-P = "/Users/johndilger/Documents/projects/SSL4EO-S12/fao_models/data/match_dev.csv"
-O = "/Users/johndilger/Documents/projects/SSL4EO-S12/fao_models/beamout.csv"
-CONFIG = "/Users/johndilger/Documents/projects/SSL4EO-S12/fao_models_runs/test.yml"
+from common import load_yml
+
+
 TMP = "/Users/johndilger/Documents/projects/SSL4EO-S12/fao_models/TMP"
 BANDS = [
     "B1",
@@ -27,10 +29,6 @@ BANDS = [
 ]
 CROPS = [44, 264, 264, 264, 132, 132, 132, 264, 132, 44, 44, 132, 132]
 PROJECT = "pc530-fao-fra-rss"
-
-import csv
-import io
-import apache_beam as beam
 
 
 # https://github.com/kubeflow/examples/blob/master/LICENSE
