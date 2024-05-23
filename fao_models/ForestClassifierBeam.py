@@ -1,4 +1,6 @@
 import collections
+import argparse
+from types import SimpleNamespace
 
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
@@ -175,14 +177,39 @@ class GetImagery(beam.DoFn):
         }
 
 
-beam_options = PipelineOptions()
-cols = ["id", "long", "lat", "prob_label", "pred_label"]
-with beam.Pipeline() as p:
-    bdf = (
-        p
-        | "read input data" >> ReadFromCsv(P)
-        | "download imagery" >> beam.ParDo(GetImagery(dst=TMP)).with_output_types(dict)
-        | "predict" >> beam.ParDo(Predict(config_path=CONFIG)).with_output_types(dict)
-        | "to csv str" >> beam.ParDo(DictToCSVString(cols))
-        | "write to csv" >> WriteToText(O, header=",".join(cols))
-    )
+def pipeline(beam_options, dotargs: SimpleNamespace):
+    if beam_options is not None:
+        beam_options = PipelineOptions(**beam_options)
+
+    cols = ["id", "long", "lat", "prob_label", "pred_label"]
+    with beam.Pipeline() as p:
+        bdf = (
+            p
+            | "read input data" >> ReadFromCsv(dotargs.input)
+            | "download imagery"
+            >> beam.ParDo(GetImagery(dst=TMP)).with_output_types(dict)
+            | "predict"
+            >> beam.ParDo(Predict(config_path=dotargs.model_config)).with_output_types(
+                dict
+            )
+            | "to csv str" >> beam.ParDo(DictToCSVString(cols))
+            | "write to csv" >> WriteToText(O, header=",".join(cols))
+        )
+
+
+def run():
+    argparse.FileType()
+
+    parser = argparse.ArgumentParser(prog="lol")
+    parser.add_argument("--input", "-i", type=str, required=True)
+    parser.add_argument("--output", "-o", type=str, required=True)
+    parser.add_argument("--model-config", "-mc", type=str)
+    group = parser.add_argument_group("pipeline-options")
+    group.add_argument("--beam-config", "-bc", type=str)
+    args = parser.parse_args()
+    print(args)
+    pipeline(beam_options=args.beam_config, dotargs=args)
+
+
+if __name__ == "__main__":
+    run()
