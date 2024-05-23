@@ -177,7 +177,7 @@ class GetImagery(beam.DoFn):
 
 def pipeline(beam_options, dotargs: SimpleNamespace):
     if beam_options is not None:
-        beam_options = PipelineOptions(**beam_options)
+        beam_options = PipelineOptions(**load_yml(beam_options))
 
     cols = ["id", "long", "lat", "prob_label", "pred_label"]
     with beam.Pipeline() as p:
