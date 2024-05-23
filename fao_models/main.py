@@ -111,8 +111,8 @@ def validate_network(val_loader, model, linear_classifier, n, avgpool, device, a
             acc1.item(), n=batch_size
         )
         metric_logger.meters["binary_f1_score"].update(acc2.item(), n=batch_size)
-        metric_logger.meters["binary_precision_score"].update(acc2.item(), n=batch_size)
-        metric_logger.meters["binary_recall_score"].update(acc2.item(), n=batch_size)
+        metric_logger.meters["binary_precision_score"].update(acc3.item(), n=batch_size)
+        metric_logger.meters["binary_recall_score"].update(acc4.item(), n=batch_size)
 
     print(
         f"* Average Precision: {metric_logger.average_precision_score.global_avg:.3f} "
