@@ -191,7 +191,7 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
                 dict
             )
             | "to csv str" >> beam.ParDo(DictToCSVString(cols))
-            | "write to csv" >> WriteToText(O, header=",".join(cols))
+            | "write to csv" >> WriteToText(dotargs.output, header=",".join(cols))
         )
 
 
@@ -205,7 +205,7 @@ def run():
     group = parser.add_argument_group("pipeline-options")
     group.add_argument("--beam-config", "-bc", type=str)
     args = parser.parse_args()
-    print(args)
+
     pipeline(beam_options=args.beam_config, dotargs=args)
 
 
