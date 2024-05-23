@@ -200,10 +200,10 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
 def run():
     argparse.FileType()
 
-    parser = argparse.ArgumentParser(prog="lol")
+    parser = argparse.ArgumentParser()
     parser.add_argument("--input", "-i", type=str, required=True)
     parser.add_argument("--output", "-o", type=str, required=True)
-    parser.add_argument("--model-config", "-mc", type=str)
+    parser.add_argument("--model-config", "-mc", type=str, required=True)
     group = parser.add_argument_group("pipeline-options")
     group.add_argument("--beam-config", "-bc", type=str)
     args = parser.parse_args()
