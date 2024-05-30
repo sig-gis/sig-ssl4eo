@@ -43,7 +43,7 @@ def get_linear_dino(**c):
 model_names = {"linear-dino": get_linear_dino}
 
 
-def get_model(model_name, **config_params):
+def get_model(model_name: str = "", **config_params):
     base, head = model_names[model_name](**config_params)
 
     return base, head
