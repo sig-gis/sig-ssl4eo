@@ -3,5 +3,6 @@ pytorch
 scikit-learn
 rasterio
 opencv
+pytest
 pip:
     metaflow
