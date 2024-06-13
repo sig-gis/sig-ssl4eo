@@ -28,7 +28,7 @@ def to_centroid(feat: ee.Feature):
 
 
 hex_samples = hex_samples.map(to_centroid)
-print(hex_samples.limit(1).getInfo())
+
 # split into train test and validate 70, 20, 10
 training_sample = hex_samples.filter("random <= 0.7")
 testing_sample = hex_samples.filter("random > 0.7 and random <=.9")
@@ -45,7 +45,7 @@ def downloadv2(collection: ee.FeatureCollection, full_namepath: str):
     df = load_csv(url)
     add_new_index(df)
     df = select_columns(df, ["id", "lng", "lat", "label"])
-    save(df, f"match_{full_namepath}")
+    save(df, full_namepath)
 
 
 def download(collection: ee.FeatureCollection, full_namepath: str):
@@ -56,6 +56,12 @@ def download(collection: ee.FeatureCollection, full_namepath: str):
         fd.write(response.content)
 
 
-downloadv2(training_sample, "training_sample.csv")
-downloadv2(testing_sample, "testing_sample.csv")
-downloadv2(validation_sample, "validation_sample.csv")
+if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+
+    path = Path(sys.argv[1])
+    print(path)
+    downloadv2(training_sample.limit(100), path / "dev_training_sample.csv")
+    downloadv2(testing_sample.limit(100), path / "dev_testing_sample.csv")
+    downloadv2(validation_sample.limit(100), path / "dev_validation_sample.csv")
