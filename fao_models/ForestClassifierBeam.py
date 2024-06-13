@@ -161,7 +161,7 @@ class GetImagery(beam.DoFn):
         local_root = Path(self.dst)
         img_root = single_patch(
             coords,
-            id=sample.id,
+            id=sample.global_id,
             dst=local_root / "imgs",
             year=2019,
             bands=BANDS,
@@ -171,7 +171,7 @@ class GetImagery(beam.DoFn):
             "img_root": img_root,
             "long": sample.long,
             "lat": sample.lat,
-            "id": sample.id,
+            "id": sample.global_id,
         }
 
 
