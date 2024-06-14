@@ -112,6 +112,11 @@ class Predict(beam.DoFn):
         import torch
         from datasets.ssl4eo_dataset import SSL4EO
 
+        if element["img_root"] == "RuntimeError":
+            element["prob_label"] = 0
+            element["pred_label"] = 0
+            yield element
+
         dataset = SSL4EO(
             root=element["img_root"].parent,
             mode="s2c",
@@ -156,23 +161,32 @@ class GetImagery(beam.DoFn):
         from download_data.download_wraper import single_patch
         from pathlib import Path
 
-        sample = element
-        coords = (sample.long, sample.lat)
-        local_root = Path(self.dst)
-        img_root = single_patch(
-            coords,
-            id=sample.global_id,
-            dst=local_root / "imgs",
-            year=2019,
-            bands=BANDS,
-            crop_dimensions=CROPS,
-        )
-        yield {
-            "img_root": img_root,
-            "long": sample.long,
-            "lat": sample.lat,
-            "id": sample.global_id,
-        }
+        try:
+            sample = element
+            coords = (sample.long, sample.lat)
+            local_root = Path(self.dst)
+            img_root = single_patch(
+                coords,
+                id=sample.global_id,
+                dst=local_root / "imgs",
+                year=2019,
+                bands=BANDS,
+                crop_dimensions=CROPS,
+            )
+            yield {
+                "img_root": img_root,
+                "long": sample.long,
+                "lat": sample.lat,
+                "id": sample.global_id,
+            }
+        except RuntimeError:
+            # no image found
+            yield {
+                "img_root": "RuntimeError",
+                "long": sample.long,
+                "lat": sample.lat,
+                "id": sample.global_id,
+            }
 
 
 def pipeline(beam_options, dotargs: SimpleNamespace):
