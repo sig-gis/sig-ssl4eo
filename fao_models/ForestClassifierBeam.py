@@ -3,6 +3,7 @@ import argparse
 from types import SimpleNamespace
 import csv
 import io
+import logging
 
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
@@ -10,7 +11,7 @@ from apache_beam.io import ReadFromCsv, WriteToText
 
 from common import load_yml
 
-
+logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 TMP = "/Users/johndilger/Documents/projects/SSL4EO-S12/fao_models/TMP"
 BANDS = [
     "B1",
@@ -89,6 +90,7 @@ class Predict(beam.DoFn):
         from _types import Config
 
         self._config = Config(**load_yml(config_path))
+        logging.info(f"config :{self._config.__dict__}")
         super().__init__()
 
     def setup(self):
@@ -181,6 +183,7 @@ class GetImagery(beam.DoFn):
                 "id": sample.global_id,
             }
         except RuntimeError:
+            logging.warning(f"no image found for sample: {sample.global_id}")
             # no image found
             yield {
                 "img_root": "RuntimeError",
@@ -191,6 +194,7 @@ class GetImagery(beam.DoFn):
 
 
 def pipeline(beam_options, dotargs: SimpleNamespace):
+    logging.info("Pipeline is starting.")
     if beam_options is not None:
         beam_options = PipelineOptions(**load_yml(beam_options))
 
