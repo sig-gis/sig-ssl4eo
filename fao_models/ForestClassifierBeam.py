@@ -117,26 +117,27 @@ class Predict(beam.DoFn):
             element["pred_label"] = 0
             yield element
 
-        dataset = SSL4EO(
-            root=element["img_root"].parent,
-            mode="s2c",
-            normalize=False,  # todo add normalized to self._config.
-        )
-
-        image = dataset[0]
-        image = torch.unsqueeze(torch.tensor(image), 0).type(torch.float32)
-
-        self.linear_classifier.eval()
-        with torch.no_grad():
-            intermediate_output = self.model.get_intermediate_layers(
-                image, self._config.n_last_blocks
+        else:
+            dataset = SSL4EO(
+                root=element["img_root"].parent,
+                mode="s2c",
+                normalize=False,  # todo add normalized to self._config.
             )
-            output = torch.cat([x[:, 0] for x in intermediate_output], dim=-1)
 
-        output = self.linear_classifier(output)
-        element["prob_label"] = output.detach().cpu().item()
-        element["pred_label"] = round(element["prob_label"])
-        yield element
+            image = dataset[0]
+            image = torch.unsqueeze(torch.tensor(image), 0).type(torch.float32)
+
+            self.linear_classifier.eval()
+            with torch.no_grad():
+                intermediate_output = self.model.get_intermediate_layers(
+                    image, self._config.n_last_blocks
+                )
+                output = torch.cat([x[:, 0] for x in intermediate_output], dim=-1)
+
+            output = self.linear_classifier(output)
+            element["prob_label"] = output.detach().cpu().item()
+            element["pred_label"] = round(element["prob_label"])
+            yield element
 
 
 class GetImagery(beam.DoFn):
