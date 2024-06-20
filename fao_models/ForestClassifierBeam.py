@@ -1,15 +1,20 @@
 import collections
 import argparse
+from pathlib import Path
 from types import SimpleNamespace
 import csv
 import io
 import logging
+from dataclasses import dataclass
+from typing import Literal
 
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.io import ReadFromCsv, WriteToText
 
 from common import load_yml
+
+# from _types import Config
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 TMP = "/Users/johndilger/Documents/projects/SSL4EO-S12/fao_models/TMP"
@@ -32,6 +37,31 @@ CROPS = [44, 264, 264, 264, 132, 132, 132, 264, 132, 44, 44, 132, 132]
 PROJECT = "pc530-fao-fra-rss"
 
 
+@dataclass
+class Config:
+    imgs_training: str
+    labels_training: str
+    imgs_testing: str
+    labels_testing: str
+
+    arch: Literal["vit_small"]
+    model_root: str | Path
+    avgpool_patchtokens: bool
+    patch_size: int
+    n_last_blocks: int
+    lr: float
+    batch_size: int
+    checkpoints_dir: str | Path
+    resume: bool
+    epochs: int
+    num_workers: int
+    seed: int
+    random_subset_frac: float
+    model_head_root: str | Path
+    model_name: str
+    checkpoint_key: str = "teacher"
+
+
 # https://github.com/kubeflow/examples/blob/master/LICENSE
 class DictToCSVString(beam.DoFn):
     """Convert incoming dict to a CSV string.
@@ -44,7 +74,7 @@ class DictToCSVString(beam.DoFn):
     """
 
     def __init__(self, fieldnames):
-        super(DictToCSVString, self).__init__()
+        # super(DictToCSVString, self).__init__()
 
         self.fieldnames = fieldnames
 
@@ -84,24 +114,33 @@ class ComputeWordLengthFn(beam.DoFn):
         return [len(element)]
 
 
+import ee
+import google.auth
+from models._models import get_model
+from models.dino.utils import restart_from_checkpoint
+import torch
+from datasets.ssl4eo_dataset import SSL4EO
+import os
+
+
 class Predict(beam.DoFn):
     def __init__(self, config_path):
-        from common import load_yml
-        from _types import Config
+        # from common import load_yml
+        # from _types import Config
 
         self._config = Config(**load_yml(config_path))
         logging.info(f"config :{self._config.__dict__}")
-        super().__init__()
+        # super().__init__()
 
     def setup(self):
         self.load_model()
-        return super().setup()
+        # return super().setup()
 
     def load_model(self):
         """load model"""
-        from models._models import get_model
-        from models.dino.utils import restart_from_checkpoint
-        import os
+        # from models._models import get_model
+        # from models.dino.utils import restart_from_checkpoint
+        # import os
 
         c = self._config
         self.model, self.linear_classifier = get_model(**c.__dict__)
@@ -111,8 +150,8 @@ class Predict(beam.DoFn):
         )
 
     def process(self, element):
-        import torch
-        from datasets.ssl4eo_dataset import SSL4EO
+        # import torch
+        # from datasets.ssl4eo_dataset import SSL4EO
 
         if element["img_root"] == "RuntimeError":
             element["prob_label"] = 0
@@ -145,11 +184,11 @@ class Predict(beam.DoFn):
 class GetImagery(beam.DoFn):
     def __init__(self, dst):
         self.dst = dst
-        super().__init__()
+        # super().__init__()
 
     def setup(self):
-        import ee
-        import google.auth
+        # import ee
+        # import google.auth
 
         credentials, _ = google.auth.default()
         ee.Initialize(
@@ -157,7 +196,7 @@ class GetImagery(beam.DoFn):
             project=PROJECT,
             opt_url="https://earthengine-highvolume.googleapis.com",
         )
-        return super().setup()
+        # return super().setup()
 
     def process(self, element):
         """download imagery"""
@@ -199,10 +238,17 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
         beam_options = PipelineOptions(**load_yml(beam_options))
 
     cols = ["id", "long", "lat", "prob_label", "pred_label"]
-    with beam.Pipeline() as p:
+    options = PipelineOptions(
+        runner="DirectRunner",  # or 'DirectRunner'
+        direct_num_workers=10,
+        direct_running_mode="multi_processing",
+        max_num_workers=20,
+    )
+    # transforms.util.Reshuffle
+    with beam.Pipeline(options=options) as p:
         bdf = (
             p
-            | "read input data" >> ReadFromCsv(dotargs.input)
+            | "read input data" >> ReadFromCsv(dotargs.input, splittable=True)
             | "download imagery"
             >> beam.ParDo(GetImagery(dst=TMP)).with_output_types(dict)
             | "predict"
@@ -212,6 +258,7 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
             | "to csv str" >> beam.ParDo(DictToCSVString(cols))
             | "write to csv" >> WriteToText(dotargs.output, header=",".join(cols))
         )
+        # bdf =
 
 
 def run():
