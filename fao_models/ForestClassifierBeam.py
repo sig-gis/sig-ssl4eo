@@ -1,20 +1,13 @@
 import collections
 import argparse
-from pathlib import Path
 from types import SimpleNamespace
-import csv
-import io
 import logging
-from dataclasses import dataclass
-from typing import Literal
 
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.io import ReadFromCsv, WriteToText
 
 from fao_models.common import load_yml
-
-# from _types import Config
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 TMP = "/Users/johndilger/Documents/projects/SSL4EO-S12/fao_models/TMP"
@@ -35,31 +28,6 @@ BANDS = [
 ]
 CROPS = [44, 264, 264, 264, 132, 132, 132, 264, 132, 44, 44, 132, 132]
 PROJECT = "pc530-fao-fra-rss"
-
-
-@dataclass
-class Config:
-    imgs_training: str
-    labels_training: str
-    imgs_testing: str
-    labels_testing: str
-
-    arch: Literal["vit_small"]
-    model_root: str | Path
-    avgpool_patchtokens: bool
-    patch_size: int
-    n_last_blocks: int
-    lr: float
-    batch_size: int
-    checkpoints_dir: str | Path
-    resume: bool
-    epochs: int
-    num_workers: int
-    seed: int
-    random_subset_frac: float
-    model_head_root: str | Path
-    model_name: str
-    checkpoint_key: str = "teacher"
 
 
 # https://github.com/kubeflow/examples/blob/master/LICENSE
@@ -117,15 +85,6 @@ class ComputeWordLengthFn(beam.DoFn):
         return [len(element)]
 
 
-import ee
-import google.auth
-from fao_models.models._models import get_model
-from fao_models.models.dino.utils import restart_from_checkpoint
-import torch
-from fao_models.datasets.ssl4eo_dataset import SSL4EO
-import os
-
-
 class Predict(beam.DoFn):
     def __init__(self, config_path):
         from fao_models.common import load_yml
@@ -133,11 +92,9 @@ class Predict(beam.DoFn):
 
         self._config = Config(**load_yml(config_path))
         logging.info(f"config :{self._config.__dict__}")
-        # super().__init__()
 
     def setup(self):
         self.load_model()
-        # return super().setup()
 
     def load_model(self):
         """load model"""
@@ -190,7 +147,6 @@ class GetImagery(beam.DoFn):
         self.PROJECT = PROJECT
         self.BANDS = BANDS
         self.CROPS = CROPS
-        # super().__init__()
 
     def setup(self):
         import ee
@@ -202,20 +158,16 @@ class GetImagery(beam.DoFn):
             project=self.PROJECT,
             opt_url="https://earthengine-highvolume.googleapis.com",
         )
-        # return super().setup()
 
     def process(self, element):
         """download imagery"""
         from fao_models.download_data.download_wraper import single_patch
         from pathlib import Path
-        import time
-        from datetime import datetime
 
-        st = time.time()
         try:
 
             sample = element
-            print(f"start {sample.global_id}")
+            logging.info(f"start {sample.global_id}")
             coords = (sample.long, sample.lat)
             local_root = Path(self.dst)
             img_root = single_patch(
@@ -226,15 +178,8 @@ class GetImagery(beam.DoFn):
                 bands=self.BANDS,
                 crop_dimensions=self.CROPS,
             )
-            time_to_str = lambda t: datetime.fromtimestamp(t).strftime(
-                "%Y-%m-%d %H:%M:%S,%f"
-            )[:-3]
-            et = time.time()
-            # print(f"img {sample.global_id} took:{et-st}")
-            # print(
-            #     f"img {sample.global_id} start: {time_to_str(st)} end: {time_to_str(et)}"
-            # )
-            print(f"end {sample.global_id}")
+
+            logging.info(f"end {sample.global_id}")
             yield {
                 "img_root": img_root,
                 "long": sample.long,
@@ -267,17 +212,12 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
         direct_running_mode="multi_processing",
         max_num_workers=20,
     )
-    # transforms.util.Reshuffle
-    from apache_beam.options.pipeline_options import (
-        DirectOptions,
-    )  # .options.pipeline_options.DirectOptions()
 
-    o = DirectOptions()
     with beam.Pipeline(options=options) as p:
-        bdf = (
+        forest_pipeline = (
             p
             | "read input data" >> ReadFromCsv(dotargs.input, splittable=True)
-            | "Reshuffle" >> beam.Reshuffle()
+            | "Reshuffle to prevent fusion" >> beam.Reshuffle()
             | "download imagery"
             >> beam.ParDo(GetImagery(dst=TMP)).with_output_types(dict)
             | "predict"
@@ -287,7 +227,7 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
             | "to csv str" >> beam.ParDo(DictToCSVString(cols))
             | "write to csv" >> WriteToText(dotargs.output, header=",".join(cols))
         )
-        # bdf =
+
     print(f"pipeline took {time.time()-st}")
 
 
