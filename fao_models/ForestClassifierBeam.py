@@ -185,6 +185,7 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
         beam_options = PipelineOptions(**load_yml(beam_options))
     conf = Config(**load_yml(dotargs.model_config))
     cols = ["id", "long", "lat", "prob_label", "pred_label", "success"]
+
     options = PipelineOptions(
         runner=conf.beam_params.runner,  # or 'DirectRunner'
         direct_num_workers=conf.beam_params.direct_num_workers,
