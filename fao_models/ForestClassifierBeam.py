@@ -90,6 +90,7 @@ class Predict(beam.DoFn):
         if element["img_root"] == "RuntimeError":
             element["prob_label"] = 0
             element["pred_label"] = 0
+            element["success"] = False
             yield element
 
         else:
@@ -112,6 +113,7 @@ class Predict(beam.DoFn):
             output = self.linear_classifier(output)
             element["prob_label"] = output.detach().cpu().item()
             element["pred_label"] = round(element["prob_label"])
+            element["success"] = True
             yield element
 
 
@@ -182,7 +184,8 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
     if beam_options is not None:
         beam_options = PipelineOptions(**load_yml(beam_options))
     conf = Config(**load_yml(dotargs.model_config))
-    cols = ["id", "long", "lat", "prob_label", "pred_label"]
+    cols = ["id", "long", "lat", "prob_label", "pred_label", "success"]
+
     options = PipelineOptions(
         runner=conf.beam_params.runner,  # or 'DirectRunner'
         direct_num_workers=conf.beam_params.direct_num_workers,

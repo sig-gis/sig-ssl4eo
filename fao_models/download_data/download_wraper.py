@@ -16,7 +16,7 @@ def single_patch(
     id: str | int,
     year: int,
     dst: str | Path,
-    collection: str = "COPERNICUS/S2",
+    collection: str = "COPERNICUS/S2_SR_HARMONIZED",
     meta_cloud_name: str = "CLOUDY_PIXEL_PERCENTAGE",
     cloud_pct: int = 10,
     radius: int = 1320,
