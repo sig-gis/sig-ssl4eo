@@ -80,11 +80,6 @@ class DictToCSVString(beam.DoFn):
         yield csv_string
 
 
-class ComputeWordLengthFn(beam.DoFn):
-    def process(self, element):
-        return [len(element)]
-
-
 class Predict(beam.DoFn):
     def __init__(self, config: Config):
         self._config = config
