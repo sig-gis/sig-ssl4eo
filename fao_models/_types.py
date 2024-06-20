@@ -4,6 +4,25 @@ from pathlib import Path
 
 
 @dataclass
+class ImageryConfig:
+    tmp: str | Path
+    bands: list[str]
+    crops: list[int]
+
+
+@dataclass
+class ProjectConfig:
+    eeproject: str
+
+
+@dataclass
+class BeamConfig:
+    runner: str
+    direct_num_workers: int
+    direct_running_mode: str
+
+
+@dataclass
 class Config:
     imgs_training: str
     labels_training: str
@@ -26,3 +45,7 @@ class Config:
     model_head_root: str | Path
     model_name: str
     checkpoint_key: str = "teacher"
+
+    imagery_params: ImageryConfig
+    project_params: ProjectConfig
+    beam_params: BeamConfig
