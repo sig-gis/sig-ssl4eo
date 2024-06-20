@@ -28,6 +28,7 @@ imagery_params:
 
 project_params:
   eeproject: "pc530-fao-fra-rss"
+  predict_id: global_id
 
 beam_params:
   runner: DirectRunner
