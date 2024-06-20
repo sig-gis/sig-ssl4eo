@@ -30,9 +30,14 @@ From the root dir (`sig-ssl4eo`) you can install the package in developer mode o
 ### Creating csv to process
 If you need to process a shp file of polygons you can use `shp2csv.py` to create a csv of centroids.
 
-Example usage:
+Example usage (python file):
 ```bash
 python fao_models/scripts/shp2csv.py fao_models/data/vectors/fao/raw/ALL_centroids_completed_v1_/ALL_centroids_completed_v1_.shp fao_models/data/vectors/fao/ALL_centroids_completed_v1_no_index.csv
+```
+
+Example usage (python module):
+```bash
+python -m fao_models.scripts.shp2csv fao_models/data/vectors/fao/raw/TZ_workshop_NEW_centr/TZ_workshop_NEW_centr.shp fao_models/data/vectors/fao/intermediate/TZ_workshop_NEW_centr.csv
 ```
 
 ### Setting up config
