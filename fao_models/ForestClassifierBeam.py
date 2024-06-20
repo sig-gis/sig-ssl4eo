@@ -1,35 +1,15 @@
 import collections
 import argparse
 from types import SimpleNamespace
-import csv
-import io
 import logging
 
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.io import ReadFromCsv, WriteToText
-
-from common import load_yml
+from fao_models.common import load_yml
+from fao_models._types import Config
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
-TMP = "/Users/johndilger/Documents/projects/SSL4EO-S12/fao_models/TMP"
-BANDS = [
-    "B1",
-    "B2",
-    "B3",
-    "B4",
-    "B5",
-    "B6",
-    "B7",
-    "B8",
-    "B8A",
-    "B9",
-    "B10",
-    "B11",
-    "B12",
-]
-CROPS = [44, 264, 264, 264, 132, 132, 132, 264, 132, 44, 44, 132, 132]
-PROJECT = "pc530-fao-fra-rss"
 
 
 # https://github.com/kubeflow/examples/blob/master/LICENSE
@@ -44,7 +24,7 @@ class DictToCSVString(beam.DoFn):
     """
 
     def __init__(self, fieldnames):
-        super(DictToCSVString, self).__init__()
+        # super(DictToCSVString, self).__init__()
 
         self.fieldnames = fieldnames
 
@@ -67,6 +47,9 @@ class DictToCSVString(beam.DoFn):
         Yields:
           A string representing the row in CSV format.
         """
+        import io
+        import csv
+
         fieldnames = self.fieldnames
         filtered_element = {
             key: value for (key, value) in element.items() if key in fieldnames
@@ -79,28 +62,18 @@ class DictToCSVString(beam.DoFn):
         yield csv_string
 
 
-class ComputeWordLengthFn(beam.DoFn):
-    def process(self, element):
-        return [len(element)]
-
-
 class Predict(beam.DoFn):
-    def __init__(self, config_path):
-        from common import load_yml
-        from _types import Config
-
-        self._config = Config(**load_yml(config_path))
+    def __init__(self, config: Config):
+        self._config = config
         logging.info(f"config :{self._config.__dict__}")
-        super().__init__()
 
     def setup(self):
         self.load_model()
-        return super().setup()
 
     def load_model(self):
         """load model"""
-        from models._models import get_model
-        from models.dino.utils import restart_from_checkpoint
+        from fao_models.models._models import get_model
+        from fao_models.models.dino.utils import restart_from_checkpoint
         import os
 
         c = self._config
@@ -112,7 +85,7 @@ class Predict(beam.DoFn):
 
     def process(self, element):
         import torch
-        from datasets.ssl4eo_dataset import SSL4EO
+        from fao_models.datasets.ssl4eo_dataset import SSL4EO
 
         if element["img_root"] == "RuntimeError":
             element["prob_label"] = 0
@@ -143,9 +116,13 @@ class Predict(beam.DoFn):
 
 
 class GetImagery(beam.DoFn):
-    def __init__(self, dst):
+    def __init__(self, dst, project, bands, crops, year):
         self.dst = dst
-        super().__init__()
+        self.PROJECT = project
+        self.BANDS = bands
+        self.CROPS = crops
+        self.year = year
+        # TODO: change caps to lower
 
     def setup(self):
         import ee
@@ -154,28 +131,31 @@ class GetImagery(beam.DoFn):
         credentials, _ = google.auth.default()
         ee.Initialize(
             credentials,
-            project=PROJECT,
+            project=self.PROJECT,
             opt_url="https://earthengine-highvolume.googleapis.com",
         )
-        return super().setup()
 
     def process(self, element):
         """download imagery"""
-        from download_data.download_wraper import single_patch
+        from fao_models.download_data.download_wraper import single_patch
         from pathlib import Path
 
         try:
+
             sample = element
+            logging.info(f"start {sample.global_id}")
             coords = (sample.long, sample.lat)
             local_root = Path(self.dst)
             img_root = single_patch(
                 coords,
                 id=sample.global_id,
                 dst=local_root / "imgs",
-                year=2019,
-                bands=BANDS,
-                crop_dimensions=CROPS,
+                year=self.year,
+                bands=self.BANDS,
+                crop_dimensions=self.CROPS,
             )
+
+            logging.info(f"end {sample.global_id}")
             yield {
                 "img_root": img_root,
                 "long": sample.long,
@@ -195,23 +175,41 @@ class GetImagery(beam.DoFn):
 
 def pipeline(beam_options, dotargs: SimpleNamespace):
     logging.info("Pipeline is starting.")
+    import time
+    from fao_models._types import Config
+
+    st = time.time()
     if beam_options is not None:
         beam_options = PipelineOptions(**load_yml(beam_options))
-
+    conf = Config(**load_yml(dotargs.model_config))
     cols = ["id", "long", "lat", "prob_label", "pred_label"]
-    with beam.Pipeline() as p:
-        bdf = (
+    options = PipelineOptions(
+        runner=conf.beam_params.runner,  # or 'DirectRunner'
+        direct_num_workers=conf.beam_params.direct_num_workers,
+        direct_running_mode=conf.beam_params.direct_running_mode,
+    )
+
+    with beam.Pipeline(options=options) as p:
+        forest_pipeline = (
             p
-            | "read input data" >> ReadFromCsv(dotargs.input)
+            | "read input data" >> ReadFromCsv(dotargs.input, splittable=True)
+            | "Reshuffle to prevent fusion" >> beam.Reshuffle()
             | "download imagery"
-            >> beam.ParDo(GetImagery(dst=TMP)).with_output_types(dict)
-            | "predict"
-            >> beam.ParDo(Predict(config_path=dotargs.model_config)).with_output_types(
-                dict
-            )
+            >> beam.ParDo(
+                GetImagery(
+                    dst=conf.imagery_params.tmp,
+                    project=conf.project_params.eeproject,
+                    bands=conf.imagery_params.bands,
+                    crops=conf.imagery_params.crops,
+                    year=conf.imagery_params.predict_year,
+                )
+            ).with_output_types(dict)
+            | "predict" >> beam.ParDo(Predict(config=conf)).with_output_types(dict)
             | "to csv str" >> beam.ParDo(DictToCSVString(cols))
             | "write to csv" >> WriteToText(dotargs.output, header=",".join(cols))
         )
+
+    print(f"pipeline took {time.time()-st}")
 
 
 def run():

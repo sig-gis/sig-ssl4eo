@@ -3,7 +3,7 @@ from pathlib import Path
 try:
     from ssl4eo_downloader import get_patch_by_match, get_collection, save_patch
 except:
-    from download_data.ssl4eo_downloader import (
+    from fao_models.download_data.ssl4eo_downloader import (
         get_patch_by_match,
         get_collection,
         save_patch,

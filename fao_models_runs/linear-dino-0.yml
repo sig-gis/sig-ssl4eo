@@ -18,3 +18,18 @@ checkpoint_key: teacher
 seed: 42
 random_subset_frac: 0.01
 num_workers: 10 
+
+imagery_params:
+  tmp: /Users/johndilger/Documents/projects/SSL4EO-S12/fao_models/TMP
+  bands: ["B1","B2","B3","B4","B5","B6","B7","B8","B8A","B9","B10","B11","B12"]
+  crops: [44, 264, 264, 264, 132, 132, 132, 264, 132, 44, 44, 132, 132]
+  train_year: 2019
+  predict_year: 2023
+
+project_params:
+  eeproject: "pc530-fao-fra-rss"
+
+beam_params:
+  runner: DirectRunner
+  direct_num_workers: 16
+  direct_running_mode: multi_processing
