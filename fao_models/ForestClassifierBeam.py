@@ -6,8 +6,8 @@ import logging
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.io import ReadFromCsv, WriteToText
-
 from fao_models.common import load_yml
+from fao_models._types import Config
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 TMP = "/Users/johndilger/Documents/projects/SSL4EO-S12/fao_models/TMP"
@@ -86,11 +86,8 @@ class ComputeWordLengthFn(beam.DoFn):
 
 
 class Predict(beam.DoFn):
-    def __init__(self, config_path):
-        from fao_models.common import load_yml
-        from fao_models._types import Config
-
-        self._config = Config(**load_yml(config_path))
+    def __init__(self, config: Config):
+        self._config = config
         logging.info(f"config :{self._config.__dict__}")
 
     def setup(self):
@@ -142,11 +139,12 @@ class Predict(beam.DoFn):
 
 
 class GetImagery(beam.DoFn):
-    def __init__(self, dst):
+    def __init__(self, dst, project, bands, crops):
         self.dst = dst
-        self.PROJECT = PROJECT
-        self.BANDS = BANDS
-        self.CROPS = CROPS
+        self.PROJECT = project
+        self.BANDS = bands
+        self.CROPS = crops
+        # TODO: change caps to lower
 
     def setup(self):
         import ee
@@ -200,17 +198,17 @@ class GetImagery(beam.DoFn):
 def pipeline(beam_options, dotargs: SimpleNamespace):
     logging.info("Pipeline is starting.")
     import time
+    from fao_models._types import Config
 
     st = time.time()
     if beam_options is not None:
         beam_options = PipelineOptions(**load_yml(beam_options))
-
+    conf = Config(**load_yml(dotargs.model_config))
     cols = ["id", "long", "lat", "prob_label", "pred_label"]
     options = PipelineOptions(
-        runner="DirectRunner",  # or 'DirectRunner'
-        direct_num_workers=16,
-        direct_running_mode="multi_processing",
-        max_num_workers=20,
+        runner=conf.beam_params.runner,  # or 'DirectRunner'
+        direct_num_workers=conf.beam_params.direct_num_workers,
+        direct_running_mode=conf.beam_params.direct_running_mode,
     )
 
     with beam.Pipeline(options=options) as p:
@@ -219,11 +217,15 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
             | "read input data" >> ReadFromCsv(dotargs.input, splittable=True)
             | "Reshuffle to prevent fusion" >> beam.Reshuffle()
             | "download imagery"
-            >> beam.ParDo(GetImagery(dst=TMP)).with_output_types(dict)
-            | "predict"
-            >> beam.ParDo(Predict(config_path=dotargs.model_config)).with_output_types(
-                dict
-            )
+            >> beam.ParDo(
+                GetImagery(
+                    dst=conf.imagery_params.tmp,
+                    project=conf.project_params.eeproject,
+                    bands=conf.imagery_params.bands,
+                    crops=conf.imagery_params.crops,
+                )
+            ).with_output_types(dict)
+            | "predict" >> beam.ParDo(Predict(config=conf)).with_output_types(dict)
             | "to csv str" >> beam.ParDo(DictToCSVString(cols))
             | "write to csv" >> WriteToText(dotargs.output, header=",".join(cols))
         )
