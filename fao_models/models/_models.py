@@ -1,6 +1,6 @@
-from models.dino import vision_transformer as vits
-from models.dino import utils
-from models.classification.linear import LinearClassifier
+from fao_models.models.dino import vision_transformer as vits
+from fao_models.models.dino import utils
+from fao_models.models.classification.linear import LinearClassifier
 from pathlib import Path
 
 
