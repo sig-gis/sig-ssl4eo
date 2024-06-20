@@ -139,11 +139,12 @@ class Predict(beam.DoFn):
 
 
 class GetImagery(beam.DoFn):
-    def __init__(self, dst, project, bands, crops):
+    def __init__(self, dst, project, bands, crops, year):
         self.dst = dst
         self.PROJECT = project
         self.BANDS = bands
         self.CROPS = crops
+        self.year = year
         # TODO: change caps to lower
 
     def setup(self):
@@ -172,7 +173,7 @@ class GetImagery(beam.DoFn):
                 coords,
                 id=sample.global_id,
                 dst=local_root / "imgs",
-                year=2019,
+                year=self.year,
                 bands=self.BANDS,
                 crop_dimensions=self.CROPS,
             )
@@ -223,6 +224,7 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
                     project=conf.project_params.eeproject,
                     bands=conf.imagery_params.bands,
                     crops=conf.imagery_params.crops,
+                    year=conf.imagery_params.predict_year,
                 )
             ).with_output_types(dict)
             | "predict" >> beam.ParDo(Predict(config=conf)).with_output_types(dict)
