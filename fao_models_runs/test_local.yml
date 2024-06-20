@@ -7,7 +7,7 @@ labels_testing: fao_models/data/match_testing_sample.csv
 
 # model params
 model_root: _ignore/B13_vits16_dino_0099_ckpt.pth
-model_head_root: linear-dino-2/checkpoint.pth.tar
+model_head_root: _ignore/linear-dino-2/checkpoint.pth.tar
 model_name: 'linear-dino'
 resume: false
 
