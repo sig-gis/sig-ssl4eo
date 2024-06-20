@@ -15,6 +15,7 @@ class ImageryConfig:
 @dataclass
 class ProjectConfig:
     eeproject: str
+    predict_id: str
 
 
 @dataclass

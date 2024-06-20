@@ -118,12 +118,13 @@ class Predict(beam.DoFn):
 
 
 class GetImagery(beam.DoFn):
-    def __init__(self, dst, project, bands, crops, year):
+    def __init__(self, dst, project, bands, crops, year, uid):
         self.dst = dst
         self.PROJECT = project
         self.BANDS = bands
         self.CROPS = crops
         self.year = year
+        self.uid = uid
         # TODO: change caps to lower
 
     def setup(self):
@@ -142,36 +143,37 @@ class GetImagery(beam.DoFn):
         from fao_models.download_data.download_wraper import single_patch
         from pathlib import Path
 
+        uid = element.__getattribute__(self.uid)
         try:
 
             sample = element
-            logging.info(f"start {sample.global_id}")
+            logging.info(f"start {uid}")
             coords = (sample.long, sample.lat)
             local_root = Path(self.dst)
             img_root = single_patch(
                 coords,
-                id=sample.global_id,
+                id=uid,
                 dst=local_root / "imgs",
                 year=self.year,
                 bands=self.BANDS,
                 crop_dimensions=self.CROPS,
             )
 
-            logging.info(f"end {sample.global_id}")
+            logging.info(f"end {uid}")
             yield {
                 "img_root": img_root,
                 "long": sample.long,
                 "lat": sample.lat,
-                "id": sample.global_id,
+                "id": uid,
             }
         except RuntimeError:
-            logging.warning(f"no image found for sample: {sample.global_id}")
+            logging.warning(f"no image found for sample: {uid}")
             # no image found
             yield {
                 "img_root": "RuntimeError",
                 "long": sample.long,
                 "lat": sample.lat,
-                "id": sample.global_id,
+                "id": uid,
             }
 
 
@@ -205,6 +207,7 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
                     bands=conf.imagery_params.bands,
                     crops=conf.imagery_params.crops,
                     year=conf.imagery_params.predict_year,
+                    uid=conf.project_params.predict_id,
                 )
             ).with_output_types(dict)
             | "predict" >> beam.ParDo(Predict(config=conf)).with_output_types(dict)
