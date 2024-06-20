@@ -10,24 +10,6 @@ from fao_models.common import load_yml
 from fao_models._types import Config
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
-TMP = "/Users/johndilger/Documents/projects/SSL4EO-S12/fao_models/TMP"
-BANDS = [
-    "B1",
-    "B2",
-    "B3",
-    "B4",
-    "B5",
-    "B6",
-    "B7",
-    "B8",
-    "B8A",
-    "B9",
-    "B10",
-    "B11",
-    "B12",
-]
-CROPS = [44, 264, 264, 264, 132, 132, 132, 264, 132, 44, 44, 132, 132]
-PROJECT = "pc530-fao-fra-rss"
 
 
 # https://github.com/kubeflow/examples/blob/master/LICENSE
