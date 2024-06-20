@@ -12,7 +12,7 @@ import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.io import ReadFromCsv, WriteToText
 
-from common import load_yml
+from fao_models.common import load_yml
 
 # from _types import Config
 
@@ -97,6 +97,9 @@ class DictToCSVString(beam.DoFn):
         Yields:
           A string representing the row in CSV format.
         """
+        import io
+        import csv
+
         fieldnames = self.fieldnames
         filtered_element = {
             key: value for (key, value) in element.items() if key in fieldnames
@@ -116,17 +119,17 @@ class ComputeWordLengthFn(beam.DoFn):
 
 import ee
 import google.auth
-from models._models import get_model
-from models.dino.utils import restart_from_checkpoint
+from fao_models.models._models import get_model
+from fao_models.models.dino.utils import restart_from_checkpoint
 import torch
-from datasets.ssl4eo_dataset import SSL4EO
+from fao_models.datasets.ssl4eo_dataset import SSL4EO
 import os
 
 
 class Predict(beam.DoFn):
     def __init__(self, config_path):
-        # from common import load_yml
-        # from _types import Config
+        from fao_models.common import load_yml
+        from fao_models._types import Config
 
         self._config = Config(**load_yml(config_path))
         logging.info(f"config :{self._config.__dict__}")
@@ -138,9 +141,9 @@ class Predict(beam.DoFn):
 
     def load_model(self):
         """load model"""
-        # from models._models import get_model
-        # from models.dino.utils import restart_from_checkpoint
-        # import os
+        from fao_models.models._models import get_model
+        from fao_models.models.dino.utils import restart_from_checkpoint
+        import os
 
         c = self._config
         self.model, self.linear_classifier = get_model(**c.__dict__)
@@ -150,8 +153,8 @@ class Predict(beam.DoFn):
         )
 
     def process(self, element):
-        # import torch
-        # from datasets.ssl4eo_dataset import SSL4EO
+        import torch
+        from fao_models.datasets.ssl4eo_dataset import SSL4EO
 
         if element["img_root"] == "RuntimeError":
             element["prob_label"] = 0
@@ -184,27 +187,35 @@ class Predict(beam.DoFn):
 class GetImagery(beam.DoFn):
     def __init__(self, dst):
         self.dst = dst
+        self.PROJECT = PROJECT
+        self.BANDS = BANDS
+        self.CROPS = CROPS
         # super().__init__()
 
     def setup(self):
-        # import ee
-        # import google.auth
+        import ee
+        import google.auth
 
         credentials, _ = google.auth.default()
         ee.Initialize(
             credentials,
-            project=PROJECT,
+            project=self.PROJECT,
             opt_url="https://earthengine-highvolume.googleapis.com",
         )
         # return super().setup()
 
     def process(self, element):
         """download imagery"""
-        from download_data.download_wraper import single_patch
+        from fao_models.download_data.download_wraper import single_patch
         from pathlib import Path
+        import time
+        from datetime import datetime
 
+        st = time.time()
         try:
+
             sample = element
+            print(f"start {sample.global_id}")
             coords = (sample.long, sample.lat)
             local_root = Path(self.dst)
             img_root = single_patch(
@@ -212,9 +223,18 @@ class GetImagery(beam.DoFn):
                 id=sample.global_id,
                 dst=local_root / "imgs",
                 year=2019,
-                bands=BANDS,
-                crop_dimensions=CROPS,
+                bands=self.BANDS,
+                crop_dimensions=self.CROPS,
             )
+            time_to_str = lambda t: datetime.fromtimestamp(t).strftime(
+                "%Y-%m-%d %H:%M:%S,%f"
+            )[:-3]
+            et = time.time()
+            # print(f"img {sample.global_id} took:{et-st}")
+            # print(
+            #     f"img {sample.global_id} start: {time_to_str(st)} end: {time_to_str(et)}"
+            # )
+            print(f"end {sample.global_id}")
             yield {
                 "img_root": img_root,
                 "long": sample.long,
@@ -234,21 +254,30 @@ class GetImagery(beam.DoFn):
 
 def pipeline(beam_options, dotargs: SimpleNamespace):
     logging.info("Pipeline is starting.")
+    import time
+
+    st = time.time()
     if beam_options is not None:
         beam_options = PipelineOptions(**load_yml(beam_options))
 
     cols = ["id", "long", "lat", "prob_label", "pred_label"]
     options = PipelineOptions(
         runner="DirectRunner",  # or 'DirectRunner'
-        direct_num_workers=10,
+        direct_num_workers=16,
         direct_running_mode="multi_processing",
         max_num_workers=20,
     )
     # transforms.util.Reshuffle
+    from apache_beam.options.pipeline_options import (
+        DirectOptions,
+    )  # .options.pipeline_options.DirectOptions()
+
+    o = DirectOptions()
     with beam.Pipeline(options=options) as p:
         bdf = (
             p
             | "read input data" >> ReadFromCsv(dotargs.input, splittable=True)
+            | "Reshuffle" >> beam.Reshuffle()
             | "download imagery"
             >> beam.ParDo(GetImagery(dst=TMP)).with_output_types(dict)
             | "predict"
@@ -259,6 +288,7 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
             | "write to csv" >> WriteToText(dotargs.output, header=",".join(cols))
         )
         # bdf =
+    print(f"pipeline took {time.time()-st}")
 
 
 def run():
