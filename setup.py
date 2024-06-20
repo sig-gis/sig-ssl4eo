@@ -1,9 +1,9 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="fucker",
+    name="ssl4eo-fao",
     version="0.0.1",
-    url="https://github.com/mypackage.git",
+    url="https://github.com/jdilger/sig-ssl4eo",
     author="John Dilger",
     author_email="johnjdilger@gmail.com",
     description="Description of my package",
