@@ -9,7 +9,12 @@ from apache_beam.io import ReadFromCsv, WriteToText
 from fao_models.common import load_yml
 from fao_models._types import Config
 
-logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
+logging.basicConfig(
+    filename="forest-classifier-beam.log",
+    encoding="utf-8",
+    format="%(asctime)s - %(message)s",
+    level=logging.INFO,
+)
 
 
 # https://github.com/kubeflow/examples/blob/master/LICENSE
