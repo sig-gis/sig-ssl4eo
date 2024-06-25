@@ -28,7 +28,7 @@ checkpoint_key: teacher
 seed: 42
 
 imagery_params:
-  tmp: /Users/johndilger/Documents/projects/SSL4EO-S12/fao_models/TMP
+  tmp: /home/sepal-user/sig-ssl4eo/TMP_test
   bands: ["B1","B2","B3","B4","B5","B6","B7","B8","B8A","B9","B10","B11","B12"]
   crops: [44, 264, 264, 264, 132, 132, 132, 264, 132, 44, 44, 132, 132]
   train_year: 2019
@@ -36,7 +36,7 @@ imagery_params:
 
 project_params:
   eeproject: "pc530-fao-fra-rss"
-  predict_id: global_id
+  predict_id: PLOTID
 
 beam_params:
   runner: DirectRunner
