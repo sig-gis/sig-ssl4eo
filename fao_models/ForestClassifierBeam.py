@@ -143,6 +143,15 @@ class GetImagery(beam.DoFn):
             opt_url="https://earthengine-highvolume.googleapis.com",
         )
 
+    def get_image_dst(self, root_dst, id):
+        from pathlib import Path
+
+        return Path(root_dst) / str(id) / str(id)
+
+    def check_exsits(self, dst, id):
+        root = self.get_image_dst(dst, id)
+        return root.exists()
+
     def process(self, element):
         """download imagery"""
         from fao_models.download_data.download_wraper import single_patch
@@ -155,14 +164,18 @@ class GetImagery(beam.DoFn):
             logging.info(f"start {uid}")
             coords = (sample.long, sample.lat)
             local_root = Path(self.dst)
-            img_root = single_patch(
-                coords,
-                id=uid,
-                dst=local_root / "imgs",
-                year=self.year,
-                bands=self.BANDS,
-                crop_dimensions=self.CROPS,
-            )
+            if self.check_exsits(local_root / "imgs", uid):
+                logging.info(f"{uid} already exists skipping download...")
+                img_root = self.get_image_dst(local_root / "imgs", uid)
+            else:
+                img_root = single_patch(
+                    coords,
+                    id=uid,
+                    dst=local_root / "imgs",
+                    year=self.year,
+                    bands=self.BANDS,
+                    crop_dimensions=self.CROPS,
+                )
 
             logging.info(f"end {uid}")
             yield {
