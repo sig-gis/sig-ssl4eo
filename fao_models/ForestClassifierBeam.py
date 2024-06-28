@@ -1,5 +1,6 @@
 import collections
 import argparse
+from pathlib import Path
 from types import SimpleNamespace
 import logging
 
@@ -8,6 +9,7 @@ from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.io import ReadFromCsv, WriteToText
 from fao_models.common import load_yml
 from fao_models._types import Config
+from fao_models.scripts import shp2csv
 
 logging.basicConfig(
     filename="forest-classifier-beam.log",
@@ -211,6 +213,14 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
         direct_num_workers=conf.beam_params.direct_num_workers,
         direct_running_mode=conf.beam_params.direct_running_mode,
     )
+
+    if dotargs.input.endswith('.shp'):
+        _cur = Path(dotargs.input)
+        _parent = _cur.parent
+        _new = _parent/ f"{_cur.stem}.csv"
+        shp2csv.shp2csv(_cur, _new)
+        dotargs.input = _new.__str__()
+        print(dotargs)
 
     with beam.Pipeline(options=options) as p:
         forest_pipeline = (

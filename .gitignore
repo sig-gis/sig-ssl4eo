@@ -11,3 +11,5 @@ data/*
 .metaflow
 metaflow-tutorials
 _ignore
+build
+fao_models/TMP
