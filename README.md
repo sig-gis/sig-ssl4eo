@@ -1,5 +1,20 @@
 # SSL4EO - FAO Forest Classifier
 
+## Environment Setup (Inference.. under construction)
+
+- Create a fresh virtual environment
+- Once in the fresh env, run `pip install -r requirements.txt` (NOTE: update that file by exporting from sepal workspace)
+- Clone the repo, then from root, `pip install -e .`
+- run `earthengine authenticate` to make sure you have GEE creds
+- Download the linear dino backbone and our latest fine-tuned linear model weights files
+-    In your terminal:
+```
+mkdir _models
+gsutil cp gs://forest-nonforest/models/linear-dino-2/checkpoint.pth.tar ./_models/. 
+gsutil cp gs://forest-nonforest/models/b13-vits16-dino/B13_vits16_dino_0099_ckpt.pth ./_models/.
+
+```
+
 ## Training A Model
 
 ### Download Weights
