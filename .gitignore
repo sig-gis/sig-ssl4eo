@@ -6,6 +6,7 @@
 **/lightning_logs/
 **/results/*
 **/ssl4eo-s12_100patches/*
+*.log
 *.png
 data/*
 .metaflow
@@ -13,3 +14,5 @@ metaflow-tutorials
 _ignore
 build
 fao_models/TMP
+fao_models/data/
+_models/
