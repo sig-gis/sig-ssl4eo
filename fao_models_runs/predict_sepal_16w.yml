@@ -28,7 +28,7 @@ checkpoint_key: teacher
 seed: 42
 
 imagery_params:
-  tmp: /home/sepal-user/sig-ssl4eo/TMP
+  tmp: /home/sepal-user/sig-ssl4eo/TMP # this shouldn't have to change if you're running on sepal but can change it..
   bands: ["B1","B2","B3","B4","B5","B6","B7","B8","B8A","B9","B10","B11","B12"]
   crops: [44, 264, 264, 264, 132, 132, 132, 264, 132, 44, 44, 132, 132]
   train_year: 2019
@@ -36,9 +36,9 @@ imagery_params:
 
 project_params:
   eeproject: "pc530-fao-fra-rss"
-  predict_id: PLOTID
+  predict_id: PLOTID # this may change depending on what unique id field their shapefile has
 
 beam_params:
   runner: DirectRunner
-  direct_num_workers: 16
+  direct_num_workers: 16 # feel free to experiment
   direct_running_mode: multi_processing
