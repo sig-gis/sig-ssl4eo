@@ -1,4 +1,9 @@
 # SSL4EO - FAO Forest Classifier
+Image Classification models for the FAO's Forest Resource Assessment data collection campaigns in Collect Earth Online.
+
+The FAO FRA team is conducting its next round of global data collection surveys. They use Collect Earth Online and local trained interpreters. Quality of interpreter answers have been a concern in the past. Answers between multiple interpreters on the same plot may disagree for a variety of reasons, but there has not been a good way to flag certain plots or interpreters in an informed way. We are developing EO models to act as a 'source of truth' in a new CEO QA/QC feature, so that project admins can identify plots or interpreters who display high levels of disagreement with a 'source of truth' and/or other interpreters. 
+
+This particular repo (see its cousin [fao-models](https://github.com/sig-gis/fao-models)) is for fine-tuning the SSL4EO foundational models for our specific task: image classification. That is, a single label for a given image. Our current fine-tuned model is just for forest/non-forest classification, but there is potential for further development beyond a binary forest/non-forest classification. 
 
 ### Setup (Under Construction)
 
@@ -87,7 +92,7 @@ Required parameters:
     - n_last_blocks (int): 4
     - checkpoint_key (str): teacher
 
-For good examples, look at [/fao_models_runs/predict_sepal_16w.yml](fao_models_runs/predict_sepal_16w.yml) for running inference on SEPAL and [/fao_models/runs/test_local_pred_adolfo.yml](fao_models_runs/test_local_pred_adolfo.yml)
+For good examples, look at [/fao_models_runs/predict_sepal_16w.yml](fao_models_runs/predict_sepal_16w.yml) for running inference on SEPAL and [/fao_models/runs/test_local_pred_adolfo.yml](fao_models_runs/test_local_pred_adolfo.yml) for running inference on your local machine.
 
 
 ### Training A Model (Under Construction)
