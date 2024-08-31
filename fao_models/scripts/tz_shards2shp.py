@@ -1,4 +1,5 @@
 # combine.py
+import os
 import glob
 from pathlib import Path
 import pandas as pd
@@ -8,6 +9,7 @@ from shapely import Point
 search_str = 'data/vectors/fao/processed/tz/**.csv*'
 def ceo_csv_combine(search_str):
     list_ = glob.glob(search_str)
+    list_ = [file for file in list_ if os.path.isfile(file)]# ignore tmp directories 
     def _to_gdf(df, longitude: str, latitude: str)->gpd.GeoDataFrame:
         """Converts a DataFrame to a GeoDataFrame with Point geometries.
 
@@ -28,10 +30,17 @@ def ceo_csv_combine(search_str):
     allres = pd.concat(res)
 
     _path = Path(list_[0])
-    filename = f"{_path.parent / _path.name.__str__().split('.csv')[0]}.shp"
+    print('_path',_path)
+    out_folder = _path.parent / _path.name.__str__().split('.csv')[0]
+    if not out_folder.exists():
+        print(f"making new folder: {out_folder}")
+        out_folder.mkdir(parents=True)
+    print('out_folder',out_folder)
+    out_file = out_folder.joinpath(out_folder.with_suffix(".shp").name)
+    print('out_file',out_file)
     gdf = _to_gdf(allres,longitude='long',latitude='lat')
     save_cols = ['PLOTID', 'SAMPLEID', 'prob_label','pred_label','success']
     gdf['PLOTID'] =gdf.id
     gdf['SAMPLEID'] =gdf.id
     out = gpd.GeoDataFrame(gdf[save_cols], geometry=gdf.geometry)
-    out.to_file(filename)
+    out.to_file(out_file)

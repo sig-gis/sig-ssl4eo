@@ -6,8 +6,8 @@ imgs_testing: "/Volumes/External/pc530/testing/imgs"
 labels_testing: fao_models/data/match_testing_sample.csv
 
 # model params
-model_root: _ignore/B13_vits16_dino_0099_ckpt.pth
-model_head_root: _ignore/linear-dino-2/checkpoint.pth.tar
+model_root: B13_vits16_dino_0099_ckpt.pth
+model_head_root: linear-dino-2/checkpoint.pth.tar
 model_name: 'linear-dino'
 resume: false
 
@@ -28,7 +28,7 @@ checkpoint_key: teacher
 seed: 42
 
 imagery_params:
-  tmp: C:/Users/kyle/SSL4EO-S12/fao_models/TMP # this must be changed to a local directory
+  tmp: /home/sepal-user/sig-ssl4eo/TMP
   bands: ["B1","B2","B3","B4","B5","B6","B7","B8","B8A","B9","B10","B11","B12"]
   crops: [44, 264, 264, 264, 132, 132, 132, 264, 132, 44, 44, 132, 132]
   train_year: 2019
@@ -36,9 +36,9 @@ imagery_params:
 
 project_params:
   eeproject: "pc530-fao-fra-rss"
-  predict_id: PLOTID # this may change depending on what unique id field there shapefile has
+  predict_id: PLOTID
 
 beam_params:
   runner: DirectRunner
-  direct_num_workers: 16 # feel free to experiment
+  direct_num_workers: 32
   direct_running_mode: multi_processing

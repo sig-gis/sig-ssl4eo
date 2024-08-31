@@ -1,0 +1,4 @@
+./fao_models/data/vectors/fao/raw/MDG_workshop/OLDMang/centroid_OLDMang_Madagascar.shp
+./fao_models/data/vectors/fao/raw/MDG_workshop/NEW/centroid_NEW_Madagascar.shp
+./fao_models/data/vectors/fao/raw/MDG_workshop/NEWMang/centroid_NEWMang_Madagascar.shp
+./fao_models/data/vectors/fao/raw/MDG_workshop/OLD/centroid_OLD_Madagascar.shp
