@@ -1,9 +1,9 @@
 # image locations
 imgs_training: /home/sepal-user/data_ssl4eo/data_ssl4eo/training/imgs
-labels_training: /home/sepal-user/sig-ssl4eo/fao_models/data/match_training_sample.csv
+labels_training: /home/sepal-user/sig-ssl4eo/fao_models/data/label_matching/match_training_sample.csv
 
 imgs_testing: /home/sepal-user/data_ssl4eo/data_ssl4eo/testing/imgs
-labels_testing: /home/sepal-user/sig-ssl4eo/fao_models/data/match_testing_sample.csv
+labels_testing: /home/sepal-user/sig-ssl4eo/fao_models/data/label_matching/match_testing_sample.csv
 
 # model params
 model_root: /home/sepal-user/sig-ssl4eo/B13_vits16_dino_0099_ckpt.pth
@@ -15,7 +15,7 @@ resume: true
 checkpoints_dir: linear-dino-2
 epochs: 15
 lr: 0.001
-batch_size: 4
+batch_size: 64
 num_workers: 0
 random_subset_frac: 0.005
 
