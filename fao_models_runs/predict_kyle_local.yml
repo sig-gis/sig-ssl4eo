@@ -1,0 +1,44 @@
+# image locations
+imgs_training: "/Volumes/External/pc530/training/imgs"
+labels_training: fao_models/data/match_training_sample.csv
+
+imgs_testing: "/Volumes/External/pc530/testing/imgs"
+labels_testing: fao_models/data/match_testing_sample.csv
+
+# model params
+model_root: _models/B13_vits16_dino_0099_ckpt.pth
+model_head_root: _models/linear-dino-2/checkpoint.pth.tar
+model_name: 'linear-dino'
+resume: false
+
+# training params
+checkpoints_dir: test-dev
+epochs: 15
+lr: 0.001
+batch_size: 4
+num_workers: 0
+random_subset_frac: 0.005
+
+# base model params
+arch: vit_small
+avgpool_patchtokens: false
+patch_size: 16
+n_last_blocks: 4
+checkpoint_key: teacher
+seed: 42
+
+imagery_params:
+  tmp: /home/kyle/code_repos/sig-ssl4eo/TMP
+  bands: ["B1","B2","B3","B4","B5","B6","B7","B8","B8A","B9","B10","B11","B12"]
+  crops: [44, 264, 264, 264, 132, 132, 132, 264, 132, 44, 44, 132, 132]
+  train_year: 2019
+  predict_year: 2023
+
+project_params:
+  eeproject: "pc530-fao-fra-rss"
+  predict_id: PLOTID # this may change depending on what unique id field their shapefile has
+
+beam_params:
+  runner: DirectRunner
+  direct_num_workers: 16 # feel free to experiment
+  direct_running_mode: multi_processing

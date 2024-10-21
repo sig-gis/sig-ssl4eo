@@ -1,0 +1,10 @@
+fao_models/data/vectors/fao/raw/ETH_SUD_SOM/South Sudan/Update South Sudan/centroids_Upd_Inl_South_Sudan2/centroids_Upd_Inl_South_Sudan2.shp
+fao_models/data/vectors/fao/raw/ETH_SUD_SOM/South Sudan/Update South Sudan/centroids_Upd_Inl_South_Sudan1/centroids_Upd_Inl_South_Sudan1.shp
+fao_models/data/vectors/fao/raw/ETH_SUD_SOM/South Sudan/New South Sudan/centroids_New_Inland_South_Sudan/centroids_New_Inland_South_Sudan.shp
+fao_models/data/vectors/fao/raw/ETH_SUD_SOM/Sudan/Update Sudan/centroids_Update_Inland_Sudan_1/centroids_Update_Inland_Sudan_1.shp
+fao_models/data/vectors/fao/raw/ETH_SUD_SOM/Sudan/New Sudan/centroids_New_Inland_Sudan/centroids_New_Inland_Sudan.shp
+fao_models/data/vectors/fao/raw/ETH_SUD_SOM/Somalia/Update Somalia/centroids_Update_Inland-Somalia_2/centroids_Update_Inland-Somalia_2.shp
+fao_models/data/vectors/fao/raw/ETH_SUD_SOM/Somalia/Update Somalia/centroids_Update_Inland-Somalia_1/centroids_Update_Inland-Somalia_1.shp
+fao_models/data/vectors/fao/raw/ETH_SUD_SOM/Somalia/New Somalia/centroids_New_Inland-Somalia/centroids_New_Inland-Somalia.shp
+fao_models/data/vectors/fao/raw/ETH_SUD_SOM/Ethiopia/Update Ethiopia/Cen_ET_Geo_Clean/Cen_ET_Geo_Clean.shp
+fao_models/data/vectors/fao/raw/ETH_SUD_SOM/Ethiopia/New Ethiopia/centroids_New_Inland_Ethiopia/centroids_New_Inland_Ethiopia.shp
