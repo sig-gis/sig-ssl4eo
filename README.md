@@ -5,23 +5,33 @@ The FAO FRA team is conducting its next round of global data collection surveys.
 
 This particular repo (see its cousin [fao-models](https://github.com/sig-gis/fao-models)) is for fine-tuning the SSL4EO foundational models for our specific task: image classification. That is, a single label for a given image. Our current fine-tuned model is just for forest/non-forest classification, but there is potential for further development beyond a binary forest/non-forest classification. 
 
-### Setup (Under Construction)
+## Setup
 
 #### Environment
-- Clone the repo and cd to the repo root directory (assume you're in root for all steps below), 
-- Create a fresh virtual environment (we are using conda/mamba)
-- Once in the fresh env, run `pip install -r requirements.txt` to get all dependencies*
-- Install repo as an editable package: `pip install -e .`
-- Run `earthengine authenticate` to make sure you have GEE creds
-- *NOTE: I get a pip error on my machine that leads me to believe something is amiss in this requirements.txt related to geopandas dependencies. Mght be best to install all you can in conda/mamba (`mamba install -c conda-forge geopandas rasterio earthengine-api pyyaml`) then pip install the rest of the dependencies that aren't on conda.
-- **NOTE2: keep trying to run `fao_models/ForestClassifierBeam.py --help` to identify any missing packages. 
+Clone the repo and cd to the repo root directory (assume you're in root for all steps below), 
 
-### Inference 
+Create a fresh virtual environment (we are using conda/mamba):
 
-At present, we use an apache_beam pipeline to parallelize image classification for large sets of FAO FRA plots. FRA officers send us shapefiles of FRA plots, our pipeline performs the following steps (simplification):
-* Read shapefile and convert the geodataframe into an apache beam PCollection, where each element contains a unique plot id and a lon,lat tuple
-* Load the model checkpoint that we'll use for inference
-* for each element, download the required imagery, perform inference on it, and append prediction to a new csv file containing plot id and prediction label
+`conda create -n faomodels python=3.11`
+
+Install some dependencies with conda and some with pip:
+```
+conda install -c conda-forge earthengine-api geopandas pyyaml
+pip install apache_beam tqdm opencv-python rasterio
+```
+
+Install pytorch according to your OS and CUDA version (if you have a GPU) following [here](https://pytorch.org/get-started/locally/)
+
+Install google-cloud-cli for your OS and get gcloud credentials
+
+- Please follow best-practice for your OS [here](https://cloud.google.com/sdk/docs/install)
+- then run `gcloud auth login` to make sure you have google cloud creds
+
+
+Last step, install this repo as a package from root
+```
+pip install -e .
+```
 
 #### Required Downloads
 - Download the linear dino backbone and our latest fine-tuned linear model weights files to `_models` dir
@@ -32,25 +42,17 @@ gsutil cp gs://forest-nonforest/models/linear-dino-2/checkpoint.pth.tar ./_model
 gsutil cp gs://forest-nonforest/models/b13-vits16-dino/B13_vits16_dino_0099_ckpt.pth ./_models/.
 
 ```
-Then you can run the beam pipline as a cli script
+## Inference 
+
+At present, we use an apache_beam pipeline to parallelize image classification for large sets of FAO FRA plots. FRA officers send us shapefiles of FRA plots, our pipeline performs the following steps (simplification):
+* Read shapefile and convert the geodataframe into an apache beam PCollection, where each element contains a unique plot id and a lon,lat tuple
+* Load the model checkpoint that we'll use for inference
+* for each element, download the required imagery, perform inference on it, and append prediction to a new csv file containing plot id and prediction label
+
+
 #### Example usage
 ```bash
 python fao_models/ForestClassifierBeam.py -i fao_models/data/vectors/fao/intermediate/test_del.csv -o TEST-fao-csv.csv -mc fao_models_runs/test.yml
-```
-
-### Creating csv to process **Deprecated?**
-**just know these modules exist, but we don't use them currently in this manner now, as the pipeline itself reads shapefiles, and we have created some postprocessing logic in the batch inference scripts (see next section!)**
-
-If you need to process a shp file of polygons you can use `shp2csv.py` as a command-line tool or as a module to create a csv of centroids.
-
-Example usage (python file):
-```bash
-python fao_models/scripts/shp2csv.py fao_models/data/vectors/fao/raw/ALL_centroids_completed_v1_/ALL_centroids_completed_v1_.shp fao_models/data/vectors/fao/ALL_centroids_completed_v1_no_index.csv
-```
-
-Example usage (python module):
-```bash
-python -m fao_models.scripts.shp2csv fao_models/data/vectors/fao/raw/TZ_workshop_NEW_centr/TZ_workshop_NEW_centr.shp fao_models/data/vectors/fao/intermediate/TZ_workshop_NEW_centr.csv
 ```
 
 ### Setting up a batch inference script
@@ -95,7 +97,7 @@ Required parameters:
 For good examples, look at [/fao_models_runs/predict_sepal_16w.yml](fao_models_runs/predict_sepal_16w.yml) for running inference on SEPAL and [/fao_models/runs/test_local_pred_adolfo.yml](fao_models_runs/test_local_pred_adolfo.yml) for running inference on your local machine.
 
 
-### Training A Model (Under Construction)
+## Training A Model (Under Construction)
 
 #### Download Weights
 - link
