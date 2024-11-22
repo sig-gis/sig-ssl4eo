@@ -40,5 +40,5 @@ project_params:
 
 beam_params:
   runner: DirectRunner
-  direct_num_workers: 16 # feel free to experiment
+  direct_num_workers: 32 # feel free to experiment
   direct_running_mode: multi_processing
