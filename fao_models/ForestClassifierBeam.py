@@ -3,6 +3,10 @@ import argparse
 from pathlib import Path
 from types import SimpleNamespace
 import logging
+import os
+import pandas as pd
+import geopandas as gpd
+import copy
 
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
@@ -95,8 +99,8 @@ class Predict(beam.DoFn):
         from fao_models.datasets.ssl4eo_dataset import SSL4EO
 
         if element["img_root"] == "RuntimeError":
-            element["prob_label"] = 0
-            element["pred_label"] = 0
+            element["ssl4_prob"] = 0
+            element["ssl4_pred"] = 0
             element["success"] = False
             yield element
 
@@ -118,8 +122,8 @@ class Predict(beam.DoFn):
                 output = torch.cat([x[:, 0] for x in intermediate_output], dim=-1)
 
             output = self.linear_classifier(output)
-            element["prob_label"] = output.detach().cpu().item()
-            element["pred_label"] = round(element["prob_label"])
+            element["ssl4_prob"] = output.detach().cpu().item()
+            element["ssl4_pred"] = round(element["ssl4_prob"])
             element["success"] = True
             yield element
 
@@ -184,7 +188,7 @@ class GetImagery(beam.DoFn):
                 "img_root": img_root,
                 "long": sample.long,
                 "lat": sample.lat,
-                "id": uid,
+                "PLOTID": uid,
             }
         except RuntimeError:
             logging.warning(f"no image found for sample: {uid}")
@@ -193,7 +197,7 @@ class GetImagery(beam.DoFn):
                 "img_root": "RuntimeError",
                 "long": sample.long,
                 "lat": sample.lat,
-                "id": uid,
+                "PLOTID": uid,
             }
 
 
@@ -206,7 +210,7 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
     if beam_options is not None:
         beam_options = PipelineOptions(**load_yml(beam_options))
     conf = Config(**load_yml(dotargs.model_config))
-    cols = ["id", "long", "lat", "prob_label", "pred_label", "success"]
+    cols = ["PLOTID", "long", "lat", "ssl4_prob", "ssl4_pred", "success"]
 
     options = PipelineOptions(
         runner=conf.beam_params.runner,  # or 'DirectRunner'
@@ -255,10 +259,41 @@ def run():
     parser.add_argument("--model-config", "-mc", type=str, required=True)
     group = parser.add_argument_group("pipeline-options")
     group.add_argument("--beam-config", "-bc", type=str)
+    
     args = parser.parse_args()
+    pipeline_args = copy.deepcopy(args)
+    
+    print(args)
+    print(pipeline_args)
 
-    pipeline(beam_options=args.beam_config, dotargs=args)
+    pipeline(beam_options=pipeline_args.beam_config, dotargs=pipeline_args)
+    # pipeline(beam_options=args.beam_config, dotargs=args)
 
+    logging.info(f"merging outputs to one dataframe")
+    cur = Path(args.input)
+    print('cur',cur)
+
+    parent = cur.parent
+    print('parent',parent)
+    files = [(parent/ file) for file in os.listdir(parent) if file.startswith(Path(args.output).stem)]
+
+    # merge all .csv shard files
+    df = pd.concat([pd.read_csv(file) for file in files])
+
+    # join it with the input shapefile 
+    shp = gpd.read_file(args.input)
+    print(type(shp))
+    shp['PLOTID'] = shp['PLOTID'].astype('int64')
+    # for idx,row in shp.iterrows():
+    #     print(row.geometry)
+    shp.to_file(parent/ f"{cur.stem}_input_shp_intmd.shp")
+    
+    joined = gpd.GeoDataFrame(shp.merge(df, on='PLOTID'), geometry='geometry')
+    # for idx,row in joined.iterrows():
+    #     print(row.geometry.is_valid)
+    
+    # save the geodataframe as a shapefile
+    joined.to_file(args.output)
 
 if __name__ == "__main__":
     run()
