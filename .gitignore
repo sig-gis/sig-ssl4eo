@@ -13,7 +13,7 @@ data/*
 metaflow-tutorials
 _ignore
 build
-fao_models/TMP
 fao_models/data/
 _models/
 *.egg-info/
+TMP/

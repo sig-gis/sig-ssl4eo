@@ -253,18 +253,42 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
 def run():
     argparse.FileType()
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input", "-i", type=str, required=True)
-    parser.add_argument("--output", "-o", type=str, required=True)
-    parser.add_argument("--model-config", "-mc", type=str, required=True)
-    group = parser.add_argument_group("pipeline-options")
-    group.add_argument("--beam-config", "-bc", type=str)
-    
+    argparse.FileType()
+    parser = argparse.ArgumentParser(description="Run Beam Pipeline for FAO Forest Classifier")
+     
+    # Input/Output arguments group
+    io_group = parser.add_argument_group("Input/Output")
+    io_group.add_argument("--input", "-i", type=str, required=True, help="Input shapefile path")
+    io_group.add_argument("--output", "-o", type=str, required=True, help="Output CSV file path")
+    io_group.add_argument("--model-config", "-mc", type=str, required=True, help="Model configuration file path")
+
+    # Beam options group
+    beam_group = parser.add_argument_group("Beam Options")
+    beam_group.add_argument("--beam-runner", type=str, required=False, help="Pipeline runner (e.g., DirectRunner, DataflowRunner)")
+
+    # Dataflow options group
+    dataflow_group = parser.add_argument_group("Dataflow Options")
+    dataflow_group.add_argument("--project", "-p", type=str, required=False, help="GCP project ID")
+    dataflow_group.add_argument("--region", "-r", type=str, required=False, help="GCP region")
+    dataflow_group.add_argument("--temp_location", "-tl", type=str, required=False, help="GCP temp location")
+    dataflow_group.add_argument("--staging_location", "-sl", type=str, required=False, help="GCP staging location")
+    dataflow_group.add_argument("--job_name", "-jn", type=str, required=False, help="Dataflow job name")
+
     args = parser.parse_args()
-    pipeline_args = copy.deepcopy(args)
+    print(args)
+
+    beam_runner = args.beam_runner
     
-    pipeline(beam_options=pipeline_args.beam_config, dotargs=pipeline_args)
-    # pipeline(beam_options=args.beam_config, dotargs=args)
+    if beam_runner == "DataflowRunner":
+        pipeline_options = PipelineOptions(
+            runner=beam_runner,
+            project=args.project,
+            job_name=args.job_name,
+            temp_location=args.temp_location,
+            region=args.region)
+        pipeline(beam_options=pipeline_options, dotargs=args)
+    else:
+        pipeline(beam_options=None, dotargs=args)
 
     logging.info(f"merging outputs to one dataframe")
     cur = Path(args.input)

@@ -39,6 +39,14 @@ project_params:
   predict_id: PLOTID # this may change depending on what unique id field their shapefile has
 
 beam_params:
-  runner: DirectRunner
+  runner: DataflowRunner
   direct_num_workers: 32 # feel free to experiment
   direct_running_mode: multi_processing
+
+dataflow_params:
+  project: "pc530-fao-fra-rss"
+  region: "us-central1"
+  temp_location: "gs://forest-nonforest/tmp"
+  staging_location: "gs://forest-nonforest/staging"
+  template_location: "gs://forest-nonforest/templates/ee_export_image_to_tfrecord"
+  job_name: "predict-kyle-local-$(date +'%Y%m%d-%H%M%S')"
