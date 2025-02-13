@@ -15,7 +15,8 @@ def shp2csv(src, dst):
     gdf["centroid"] = gdf.to_crs("+proj=cea").centroid.to_crs(gdf.crs)
     gdf["long"] = gdf["centroid"].x
     gdf["lat"] = gdf["centroid"].y
-    gdf.to_csv(dst, index=False)
+    gdf[['PLOTID','SAMPLEID','long','lat','centroid']].to_csv(dst, index=False) # prevent introduction of unnecesary/problem fields from provider
+    # gdf.to_csv(dst, index=False) 
 
 
 if __name__ == "__main__":

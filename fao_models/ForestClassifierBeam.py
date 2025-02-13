@@ -217,7 +217,7 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
         direct_num_workers=conf.beam_params.direct_num_workers,
         direct_running_mode=conf.beam_params.direct_running_mode,
     )
-
+    logging.info(f"beam options: {options}")
     if dotargs.input.endswith('.shp'):
         _cur = Path(dotargs.input)
         _parent = _cur.parent
@@ -264,21 +264,19 @@ def run():
     pipeline_args = copy.deepcopy(args)
     
     pipeline(beam_options=pipeline_args.beam_config, dotargs=pipeline_args)
-    # pipeline(beam_options=args.beam_config, dotargs=args)
 
     logging.info(f"merging outputs to one dataframe")
-    cur = Path(args.input)
+    cur = Path(args.output)
 
     parent = cur.parent
     files = [(parent/ file) for file in os.listdir(parent) if file.startswith(Path(args.output).stem)]
-
+    logging.info(f"Merging {len(files)} files")
     # merge all .csv shard files
     df = pd.concat([pd.read_csv(file) for file in files])
 
     # join it with the input shapefile 
     shp = gpd.read_file(args.input)
     shp['PLOTID'] = shp['PLOTID'].astype('int64')
-    shp.to_file(parent/ f"{cur.stem}_input_shp_intmd.shp")
     
     joined = gpd.GeoDataFrame(shp.merge(df, on='PLOTID'), geometry='geometry')
     

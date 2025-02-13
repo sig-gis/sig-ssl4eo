@@ -16,5 +16,6 @@ if __name__ == "__main__":
     out_shp = shp1.merge(shp2, on='PLOTID')
     out_shp = out_shp[['PLOTID', 'ssl4_prob', 'ssl4_pred','r50_prob','r50_pred','geometry_x']]
     out_shp = out_shp.rename(columns={'geometry_x':'geometry'})
+    out_shp.loc[:,'agree'] = out_shp.ssl4_pred == out_shp.r50_pred
     out_shp.to_file(args.output)
 

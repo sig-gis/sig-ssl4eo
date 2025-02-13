@@ -1,0 +1,4 @@
+/home/kyle/Downloads/Geometries/centroids_Indonesia_17395_NEW/centroids_Indonesia_17395_NEW.shp
+/home/kyle/Downloads/Geometries/centroids_Indonesia_17395_NEWmang/centroids_Indonesia_17395_NEWmang.shp
+/home/kyle/Downloads/Geometries/centroids_Indonesia_17395_OLD/centroids_Indonesia_17395_OLD.shp
+/home/kyle/Downloads/Geometries/centroids_Indonesia_17395_OLDmang/centroids_Indonesia_17395_OLDmang.shp
